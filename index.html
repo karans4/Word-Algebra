@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Algebra</title>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- RESTORED CSS VARIABLES (The "Good" Theme) --- */
+        :root {
+            --primary: #ff4b4b;
+            --bg-body: #0e1117;
+            --bg-panel: #262730;
+            --text-main: #fafafa;
+            --text-sub: #D0D4D5;
+            --border: rgba(250, 250, 250, 0.1);
+            --input-bg: #262730;
+            --font-stack: sans-serif;
+            --sidebar-width: 280px;
+            --color-prev: #ffbd45;
+            --color-next: #09ab3b;
+        }
+
+        [data-theme="light"] {
+            --bg-body: #ffffff;
+            --bg-panel: #f0f2f6;
+            --text-main: #31333F;
+            --text-sub: #41434F;
+            --border: #e6e9ef;
+            --input-bg: #ffffff;
+            --color-prev: #e69100;
+            --color-next: #00802b;
+        }
+
+        * { box-sizing: border-box; }
+        body { font-family: var(--font-stack); margin: 0; background-color: var(--bg-body); color: var(--text-main); font-size: 15px; }
+        
+        /* --- LAYOUT --- */
+        .main-content { 
+            max-width: 1200px; margin: 0 auto; padding: 30px 1.5rem; transition: margin-left 0.3s;
+        }
+
+        /* Sidebar */
+        .sidebar { 
+            position: fixed; top: 0; left: -300px; width: var(--sidebar-width); height: 100%; 
+            background: var(--bg-panel); padding: 1.5rem 1rem; transition: left 0.3s ease; 
+            z-index: 100; overflow-y: auto; display: flex; flex-direction: column; 
+            border-right: 1px solid var(--border); box-shadow: 4px 0 15px rgba(0,0,0,0.3);
+        }
+        .sidebar.open { left: 0; } 
+
+        @media (min-width: 800px) {
+            .sidebar { left: 0; box-shadow: none; }
+            .main-content { margin-left: var(--sidebar-width); }
+            .hamburger { display: none !important; }
+            .sidebar-close-btn { display: none !important; }
+        }
+
+        /* --- CONTROLS --- */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .hamburger { font-size: 1.4rem; cursor: pointer; background: none; border: none; color: var(--text-main); padding: 0; margin-right: 15px; }
+        h2 { margin: 0; font-weight: 700; letter-spacing: -0.5px; font-size: 1.5rem; }
+
+        /* MOBILE TOUCH OPTIMIZATION */
+        button, input, .chip, .slider-container input {
+            touch-action: manipulation; 
+        }
+
+        input[type="text"], input[type="number"] { 
+            background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border); 
+            border-radius: 0.25rem; padding: 6px 10px; font-family: var(--font-stack); 
+            font-size: 0.95rem; outline: none; width: 100%; transition: border-color 0.2s;
+        }
+
+        /* ERROR STYLES */
+        .input-error { border-color: #ff4b4b !important; background: rgba(255, 75, 75, 0.1) !important; }
+        .error-msg { color: #ff4b4b; font-size: 0.85rem; margin-top: 8px; font-weight: 600; min-height: 1.2em; display: flex; align-items: center; gap: 6px; visibility: hidden; }
+        .error-msg.visible { visibility: visible; animation: shake 0.3s ease-in-out; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+        /* SERVER ERROR BANNER */
+        .server-error-banner {
+            background: #ff4b4b; color: white; padding: 10px; text-align: center; font-weight: bold;
+            position: fixed; top: 0; left: 0; width: 100%; z-index: 2000; transform: translateY(-100%); transition: transform 0.3s;
+        }
+        .server-error-banner.visible { transform: translateY(0); }
+
+        button { cursor: pointer; background-color: transparent; color: var(--text-main); border: 1px solid var(--border); padding: 0.4rem 0.8rem; border-radius: 0.25rem; font-weight: 600; font-size: 0.85rem; transition: 0.2s; }
+        button:hover { border-color: var(--primary); color: var(--primary); }
+        button.primary-btn { background-color: var(--primary); color: white; border: 1px solid var(--primary); }
+        button.primary-btn:hover { background-color: #ff2b2b; color: white; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .panel { margin-bottom: 1.5rem; }
+        .control-label { font-size: 0.75rem; font-weight: 600; color: var(--text-sub); margin-bottom: 0.25rem; display: block; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .suggestions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; min-height: 24px; }
+        .chip { 
+            padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; 
+            background: var(--bg-panel); border: 1px solid var(--border); 
+            color: var(--text-sub); transition: 0.2s; display: inline-flex; align-items: center; gap: 4px;
+        }
+        .chip:hover { border-color: var(--primary); color: var(--text-main); }
+        .chip b { color: var(--primary); font-weight: 600; }
+
+        /* Slider Area */
+        .slider-container { margin-top: 8px; display: flex; align-items: center; gap: 10px; height: 24px; }
+        .slider-label { font-size: 0.8rem; color: var(--text-sub); font-weight: 600; white-space: nowrap; }
+        input[type=range] { width: 100%; cursor: pointer; }
+
+        /* --- TABLE --- */
+        .grid-wrapper { width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 0.25rem; }
+        
+        /* Default grid container */
+        .grid-container { display: flex; flex-direction: column; font-family: "Source Sans Pro", sans-serif; min-width: 600px; background: var(--bg-panel); }
+        
+        .grid-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); background: var(--bg-body); height: 44px; }
+        .grid-row:last-child { border-bottom: none; }
+        .grid-header { background: var(--bg-panel); font-weight: 600; color: var(--text-sub); font-size: 0.8rem; letter-spacing: 0.5px; }
+        
+        .cell { 
+            flex: 1; display: flex; align-items: center; justify-content: center; 
+            padding: 4px 6px; min-height: 100%; text-align: center;
+            font-weight: 600; font-size: 0.95rem; white-space: normal; 
+            overflow-wrap: break-word; word-break: break-word; line-height: 1.1;
+            border-right: 1px solid rgba(255,255,255,0.03);
+            /* Min-width removed as requested to restore fluidity */
+        }
+        .cell:last-child { border-right: none; }
+        
+        .cell-input { flex: 0 0 180px; padding: 0; background: var(--input-bg); min-width: 180px; }
+        .cell-input input { text-align: center; border: none; font-weight: 700; background: transparent; height: 100%; border-radius: 0; padding: 0; }
+        .cell-input input:focus { box-shadow: inset 0 0 0 2px var(--primary); }
+
+        .cell-del { flex: 0 0 45px; min-width: 45px; display: flex; justify-content: center; align-items: stretch; padding: 0; }
+        .del-btn { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--primary); cursor: pointer; padding: 0; font-size: 1.1rem; border-radius: 0; transition: background 0.15s ease; }
+        .del-btn:hover { background: rgba(255, 75, 75, 0.15); color: #ff4b4b; }
+
+        .prev-text { color: var(--color-prev); }
+        .next-text { color: var(--color-next); }
+        .animate-pop { animation: pop_in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        @keyframes pop_in { from { opacity: 0.2; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+
+        /* Library */
+        .lib-search { margin-bottom: 15px; }
+        .lib-controls { display: flex; gap: 5px; margin-bottom: 15px; }
+        .lib-controls button { flex: 1; font-size: 0.75rem; padding: 4px; }
+        .lib-item { padding: 8px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
+        .lib-item:hover { background: rgba(255,255,255,0.03); }
+        .lib-head { display: flex; justify-content: space-between; font-weight: 600; font-size: 0.85rem; }
+        .lib-meta { font-size: 0.7rem; color: var(--text-sub); }
+        .lib-words { font-size: 0.75rem; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+
+        dialog { background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 20px 50px rgba(0,0,0,0.5); width: 90%; max-width: 350px; }
+        dialog::backdrop { background: rgba(0,0,0,0.7); }
+
+        .loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:var(--bg-body); z-index:999; display:flex; flex-direction:column; justify-content:center; align-items:center; transition: opacity 0.5s; }
+        
+        .noscript-banner { 
+            background: #ffbd45; color: #333; padding: 10px; text-align: center; font-weight: 600; font-size: 0.9rem;
+        }
+        .noscript-banner a { color: #000; text-decoration: underline; }
+
+        @media (max-width: 600px) {
+            .main-content { padding: 15px 0.5rem; }
+            .grid-container { min-width: 100%; }
+            .cell { font-size: 0.75rem; padding: 2px; min-width: 60px; }
+            .cell-input { flex: 0 0 100px; min-width: 100px; }
+            .cell-del { flex: 0 0 30px; min-width: 30px; }
+            .del-btn { font-size: 0.9rem; }
+            input[type="text"] { font-size: 0.85rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <noscript>
+        <div class="noscript-banner">
+            ⚠️ This application requires JavaScript to function. 
+            <a href="https://github.com/placeholder" target="_blank">View Source on GitHub</a>
+        </div>
+    </noscript>
+
+    <div id="serverError" class="server-error-banner">
+        ⚠️ Cannot connect to server. Features may be limited.
+    </div>
+
+    <div id="loader" class="loading-overlay">
+        <h2>Downloading Neural Matrix...</h2>
+        <div style="width: 200px; height: 4px; background: #333; border-radius: 2px; overflow: hidden;">
+            <div id="loadBar" style="width: 0%; height: 100%; background: var(--primary); transition: width 0.2s;"></div>
+        </div>
+        <p style="color: var(--text-sub); font-size: 0.9rem; margin-top: 10px;">~15MB (Cached after first run)</p>
+    </div>
+
+    <div class="sidebar" id="sidebar">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="margin:0;">📚 Library</h3>
+            <button class="sidebar-close-btn" onclick="toggleSidebar()" style="border:none;">✕</button>
+        </div>
+        <input type="text" id="libSearch" class="lib-search" placeholder="Search..." oninput="loadLibrary()">
+        <div class="lib-controls">
+            <button id="sortPop" onclick="setSort('popular')">🔥 Popular</button>
+            <button id="sortNew" onclick="setSort('newest')">🕒 Newest</button>
+        </div>
+        <div id="libList">Loading...</div>
+    </div>
+
+    <dialog id="shareModal">
+        <h3 style="margin-top:0;">🔗 Share</h3>
+        <p style="font-size:0.85rem; color:var(--text-sub); margin-bottom:15px;">Unique link generated.</p>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <button onclick="copyLink()" id="copyBtn">📋 Copy Link</button>
+            <button onclick="tweetLink()" style="border-color:#1DA1F2; color:#1DA1F2;">🐦 Tweet This</button>
+            <button onclick="document.getElementById('shareModal').close()" style="margin-top:5px;">Close</button>
+        </div>
+    </dialog>
+
+    <div class="main-content">
+        <div class="header">
+            <div style="display:flex; align-items:center;">
+                <button class="hamburger" onclick="toggleSidebar()">☰</button>
+                <h2 style="margin:0;">🧬 Word Algebra <span style="font-size:0.6em; color:var(--color-next); border:1px solid var(--color-next); padding:2px 6px; border-radius:4px; vertical-align:middle; margin-left: 8px;">EDGE</span></h2>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button onclick="toggleTheme()" id="themeBtn">🌙</button>
+                <button onclick="openShare()">🔗 Share</button>
+                <button class="primary-btn" onclick="saveCurrent(true)">💾 Save</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div style="display: flex; gap: 10px; align-items: flex-start;">
+                <div style="flex: 1;">
+                    <span class="control-label">START WORD</span>
+                    <input type="text" id="startWord" value="man" oninput="handleInput()">
+                    <div class="slider-container">
+                        <span class="slider-label">ANALOGY RECURSION: <span id="stepsDisplay" style="color:var(--primary)">1</span></span>
+                        <input type="range" id="steps" min="1" max="5" value="1" oninput="handleSlider(this.value)">
+                    </div>
+                </div>
+                <div style="padding-top: 28px; font-size:1.2rem; color:var(--text-sub);">&rarr;</div>
+                <div style="flex: 1;">
+                    <span class="control-label">END WORD</span>
+                    <input type="text" id="endWord" value="woman" oninput="handleInput()">
+                    <span class="control-label" style="margin-top: 12px;">SUGGESTIONS</span>
+                    <div class="suggestions" id="suggestionArea"></div>
+                </div>
+            </div>
+            <div id="mainError" class="error-msg">⚠️ Word not in input dictionary.</div>
+        </div>
+
+        <div class="grid-wrapper">
+            <div id="tableContainer" class="grid-container"></div>
+        </div>
+        
+        <div style="margin-top:20px; text-align:center;">
+            <button id="addBtn" onclick="addRow()" style="width:100%;">+ Add Test Row</button>
+        </div>
+    </div>
+
+    <script>
+        // --- DYNAMIC API CONFIGURATION ---
+        const getApiUrl = () => {
+            const p = window.location.protocol;
+            if (p === 'blob:' || p === 'about:') return 'http://127.0.0.1:5000/api';
+            if (p === 'file:') return 'http://127.0.0.1:5000/api';
+            const h = window.location.hostname;
+            const port = window.location.port;
+            if ((h === 'localhost' || h === '127.0.0.1') && port !== '5000') {
+                 return 'http://127.0.0.1:5000/api';
+            }
+            return '/api';
+        };
+        const API = getApiUrl();
+        console.log("🔗 API Connected to:", API);
+
+        // --- GLOBAL ERROR HANDLING ---
+        function handleServerError() {
+            document.getElementById('serverError').classList.add('visible');
+            setTimeout(() => document.getElementById('serverError').classList.remove('visible'), 5000);
+        }
+
+        // --- CACHES ---
+        const relationshipCache = new Map(); // Library views
+        const suggestionCache = new Map();   // Autocomplete suggestions
+        
+        // --- VECTOR MATH ENGINE (CLIENT SIDE) ---
+        class VectorSystem {
+            constructor() {
+                this.vocab = [];
+                this.vocabMap = new Map(); // O(1) Lookup
+                this.matrix = null; // Float32Array
+                this.dim = 384;
+                this.ready = false;
+                this.cache = {}; // L1 Cache (Input vectors - Results)
+                this.inflight = new Map(); // L1.5 Cache (In-Flight Promises - Deduplication)
+            }
+
+            async init(onProgress) {
+                try {
+                    const res = await fetch(`${API}/matrix`);
+                    if (!res.ok) {
+                        handleServerError();
+                        console.error(await res.text());
+                        return;
+                    }
+                    const total = parseInt(res.headers.get('content-length'), 10);
+                    let loaded = 0;
+                    const reader = res.body.getReader();
+                    const chunks = [];
+                    while(true) {
+                        const {done, value} = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                        loaded += value.byteLength;
+                        if(total) onProgress(loaded / total);
+                    }
+                    const text = await new Blob(chunks).text();
+                    if(text.trim().startsWith('<')) throw new Error("Invalid JSON");
+                    const data = JSON.parse(text);
+                    
+                    this.vocab = data.vocab;
+                    // Build O(1) Map for L2 Cache
+                    data.vocab.forEach((w, i) => this.vocabMap.set(w.toLowerCase(), i));
+                    
+                    this.matrix = new Float32Array(data.vectors);
+                    this.ready = true;
+                } catch (e) { 
+                    console.error(e); 
+                    handleServerError();
+                    alert("Failed to load Matrix. Check connection."); 
+                }
+            }
+
+            async getInputVector(word) {
+                word = word.toLowerCase().trim();
+                
+                // 1. Check L1 Cache (Result Memory)
+                if(this.cache[word]) return this.cache[word];
+                
+                // 1.5. Check In-Flight Cache (Promise Memory)
+                // This prevents 5 simultaneous requests for "king" from firing 5 network calls
+                if (this.inflight.has(word)) {
+                    return this.inflight.get(word);
+                }
+
+                // 2. Check L2 Cache (The 5k Matrix - Instant)
+                if (this.vocabMap.has(word)) {
+                    const idx = this.vocabMap.get(word);
+                    const start = idx * this.dim;
+                    const end = start + this.dim;
+                    const vec = this.matrix.slice(start, end);
+                    this.cache[word] = vec;
+                    return vec;
+                }
+
+                // Create the Fetch Promise
+                const fetchPromise = (async () => {
+                    try {
+                        const res = await fetch(`${API}/vector?word=${word}`);
+                        if(!res.ok) {
+                            if (res.status !== 404) handleServerError();
+                            return null;
+                        }
+                        const arr = await res.json();
+                        if(!arr) return null;
+                        const vec = new Float32Array(arr);
+                        
+                        // Populate Cache
+                        this.cache[word] = vec;
+                        return vec;
+                    } catch (e) { 
+                        handleServerError();
+                        return null; 
+                    } finally {
+                        // Request done, remove from in-flight
+                        this.inflight.delete(word);
+                    }
+                })();
+
+                // Store Promise to deduplicate subsequent calls
+                this.inflight.set(word, fetchPromise);
+                return fetchPromise;
+            }
+
+            calculateTarget(startVec, endVec, rowVec, step) {
+                const diff = new Float32Array(this.dim);
+                const target = new Float32Array(this.dim);
+                const scalar = step;
+                for(let i=0; i<this.dim; i++) diff[i] = endVec[i] - startVec[i];
+                for(let i=0; i<this.dim; i++) target[i] = rowVec[i] + (diff[i] * scalar);
+                let norm = 0;
+                for(let i=0; i<this.dim; i++) norm += target[i] * target[i];
+                norm = Math.sqrt(norm);
+                for(let i=0; i<this.dim; i++) target[i] /= norm;
+                return target;
+            }
+
+            findClosest(targetVec, excludeWords) {
+                let maxScore = -2.0;
+                let bestIdx = -1;
+                for(let i=0; i<this.vocab.length; i++) {
+                    if(excludeWords.has(this.vocab[i])) continue;
+                    let score = 0;
+                    const offset = i * this.dim;
+                    for(let j=0; j<this.dim; j++) score += targetVec[j] * this.matrix[offset + j];
+                    if(score > maxScore) { maxScore = score; bestIdx = i; }
+                }
+                return bestIdx !== -1 ? this.vocab[bestIdx] : "???";
+            }
+        }
+
+        // --- APP LOGIC ---
+        const engine = new VectorSystem();
+        let rows = [
+            {id:'init_1', word:'man'}, 
+            {id:'init_2', word:'king'}, 
+            {id:'init_3', word:'actor'}, 
+            {id:'init_4', word:'obama'}
+        ];
+        let debounceTimer;
+        let currentSort = 'popular';
+        let isInternalUpdate = false;
+
+        window.onload = async () => {
+            const bar = document.getElementById('loadBar');
+            const loader = document.getElementById('loader');
+            
+            // 1. Initialize Engine
+            await engine.init((pct) => { if(bar) bar.style.width = (pct * 100) + '%'; });
+            
+            if (loader) { loader.style.opacity = 0; setTimeout(() => loader.remove(), 500); }
+            
+            // 2. Check for Permalink or State Params
+            const urlParams = new URLSearchParams(window.location.search);
+            const id = urlParams.get('rel');
+            const pStart = urlParams.get('s');
+            
+            if (id) {
+                await loadRelationship(id);
+            } else if (pStart) {
+                document.getElementById('startWord').value = pStart;
+                document.getElementById('endWord').value = urlParams.get('e') || 'woman';
+                document.getElementById('steps').value = urlParams.get('d') || 1;
+                document.getElementById('stepsDisplay').textContent = urlParams.get('d') || 1;
+                const rVal = urlParams.get('r');
+                if (rVal) {
+                    rows = rVal.split(',').map((w, i) => ({ id: `url_${i}`, word: w }));
+                }
+                isInternalUpdate = true; // Don't trigger URL update on initial render
+                renderTable();
+                runCalculation();
+            } else {
+                isInternalUpdate = true;
+                renderTable();
+                runCalculation();
+            }
+            
+            // 3. Load Library
+            loadLibrary();
+        };
+
+        function updateUrlState(s, e, d) {
+            if (isInternalUpdate) { isInternalUpdate = false; return; }
+            
+            const rStr = rows.map(r => r.word).join(',');
+            const params = new URLSearchParams(window.location.search);
+            
+            if (params.has('rel')) params.delete('rel');
+
+            params.set('s', s);
+            params.set('e', e);
+            params.set('d', d);
+            params.set('r', rStr);
+            
+            try {
+                window.history.replaceState({}, '', `?${params.toString()}`);
+            } catch (e) { console.warn("URL update failed (sandbox):", e); }
+        }
+
+        async function runCalculation() {
+            if(!engine.ready) return;
+            const sWord = document.getElementById('startWord').value.trim();
+            const eWord = document.getElementById('endWord').value.trim();
+            const steps = parseInt(document.getElementById('steps').value);
+            
+            const errEl = document.getElementById('mainError');
+            const sInput = document.getElementById('startWord');
+            const eInput = document.getElementById('endWord');
+
+            // --- VALIDATION: IDENTITY CHECK ---
+            if (sWord.toLowerCase() === eWord.toLowerCase()) {
+                sInput.classList.add('input-error');
+                eInput.classList.add('input-error');
+                errEl.textContent = "⚠️ Start and End words cannot be the same.";
+                errEl.classList.add('visible');
+                return;
+            }
+
+            updateUrlState(sWord, eWord, steps);
+
+            // Promise.all allows these to run in parallel, and our new engine.getInputVector
+            // will ensure only 1 request per unique word is actually sent to network
+            const [sVec, eVec] = await Promise.all([
+                engine.getInputVector(sWord),
+                engine.getInputVector(eWord)
+            ]);
+
+            if(!sVec) sInput.classList.add('input-error'); else sInput.classList.remove('input-error');
+            if(!eVec) eInput.classList.add('input-error'); else eInput.classList.remove('input-error');
+            
+            if(!sVec || !eVec) { 
+                errEl.textContent = "⚠️ Word not in input dictionary.";
+                errEl.classList.add('visible'); 
+                return; 
+            }
+            errEl.classList.remove('visible');
+
+            fetchSuggestions(sWord);
+
+            for(let row of rows) {
+                const rowVec = await engine.getInputVector(row.word);
+                // FIXED: Use escaped selector for safety with dynamic IDs
+                const rowInput = document.querySelector(`div[id="row-${row.id}"] input`);
+                
+                if(!rowVec) {
+                    if(rowInput) rowInput.parentElement.classList.add('input-error');
+                    for(let i=1; i<=5; i++) {
+                         let elF = document.getElementById(`cell-${row.id}-${i}`);
+                         let elB = document.getElementById(`cell-${row.id}--${i}`);
+                         if(elF) elF.textContent = "-";
+                         if(elB) elB.textContent = "-";
+                    }
+                    continue;
+                }
+                if(rowInput) rowInput.parentElement.classList.remove('input-error');
+
+                // UPDATED EXCLUSION: Only exclude the current row word
+                let excludeFwd = new Set([row.word.toLowerCase()]);
+                let excludeBwd = new Set([row.word.toLowerCase()]);
+
+                for(let i=1; i<=steps; i++) {
+                    const tFwd = engine.calculateTarget(sVec, eVec, rowVec, i);
+                    const resFwd = engine.findClosest(tFwd, excludeFwd);
+                    excludeFwd.add(resFwd);
+                    updateCell(row.id, i, resFwd, 'next-text');
+
+                    const tBwd = engine.calculateTarget(sVec, eVec, rowVec, -i);
+                    const resBwd = engine.findClosest(tBwd, excludeBwd);
+                    excludeBwd.add(resBwd);
+                    updateCell(row.id, -i, resBwd, 'prev-text');
+                }
+                for(let i=steps+1; i<=5; i++) { updateCell(row.id, i, ""); updateCell(row.id, -i, ""); }
+            }
+        }
+
+        function updateCell(rid, step, txt, cls) {
+            const el = document.getElementById(`cell-${rid}-${step}`);
+            if(!el) return;
+            if(el.textContent !== txt) { el.textContent = txt; el.className = `cell ${cls || ''} animate-pop`; }
+        }
+
+        async function fetchSuggestions(word) {
+            
+            // --- CACHE CHECK ---
+            if (suggestionCache.has(word)) {
+                renderSuggestions(suggestionCache.get(word));
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API}/suggestions?word=${word}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                // --- SAVE TO CACHE ---
+                suggestionCache.set(word, data);
+                
+                renderSuggestions(data);
+            } catch(e) {}
+        }
+
+        function renderSuggestions(data) {
+            const area = document.getElementById('suggestionArea');
+            area.innerHTML = '';
+            const mk = (t, l) => {
+                const d = document.createElement('div'); d.className='chip'; 
+                d.innerHTML=`<b>${l}:</b> ${t}`; 
+                d.onclick=()=>{document.getElementById('endWord').value=t; handleInput()};
+                return d; 
+            };
+            data.neighbors.forEach(w => area.appendChild(mk(w, '📍 Neighbor ')));
+            data.wildcards.forEach(w => area.appendChild(mk(w, '🎲 Wildcard ')));
+        }
+
+        async function saveCurrent(showSidebar) {
+            const s = document.getElementById('startWord').value;
+            const e = document.getElementById('endWord').value;
+            const d = parseInt(document.getElementById('steps').value);
+            try {
+                const res = await fetch(`${API}/save`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ start_word: s, end_word: e, depth: d, test_words: rows })
+                });
+                const data = await res.json();
+                if(data.error) throw new Error(data.error);
+                
+                // --- WRITE-THROUGH CACHING ---
+                // We just created this state, so we know exactly what it is.
+                // Store it in cache so if we visit this ID later, we don't fetch.
+                const currentState = {
+                    start: s,
+                    end: e,
+                    depth: d,
+                    words: rows.map(r => r.word)
+                };
+                relationshipCache.set(data.id, currentState);
+
+                isInternalUpdate = true; 
+                try {
+                    window.history.pushState({}, '', `?rel=${encodeURIComponent(data.id)}`);
+                } catch(e) { console.warn("History push failed:", e); }
+                
+                if (showSidebar) { setSort('newest'); loadLibrary(); toggleSidebar(); }
+                return true;
+            } catch(e) { 
+                handleServerError();
+                alert("Save failed. Server may be unreachable."); 
+                return false; 
+            }
+        }
+
+        async function loadRelationship(id) {
+            // CACHE CHECK: If we already have this ID, use local data and skip API call
+            if (relationshipCache.has(id)) {
+                console.log("⚡ Loaded from Client Cache:", id);
+                const data = relationshipCache.get(id);
+                applyDataToUI(data);
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API}/load?id=${encodeURIComponent(id)}`);
+                if(!res.ok) { handleServerError(); return; }
+                
+                const data = await res.json();
+                
+                // SAVE TO CACHE
+                relationshipCache.set(id, data);
+                
+                applyDataToUI(data);
+            } catch(e) { 
+                console.error(e); 
+                handleServerError(); 
+            }
+        }
+
+        function applyDataToUI(data) {
+            document.getElementById('startWord').value = data.start;
+            document.getElementById('endWord').value = data.end;
+            document.getElementById('steps').value = data.depth;
+            document.getElementById('stepsDisplay').textContent = data.depth;
+            rows = data.words.map((w, i) => ({ id: `load_${i}`, word: w }));
+            
+            isInternalUpdate = true; 
+            renderTable();
+            runCalculation(); 
+        }
+
+        async function loadLibrary() {
+            const search = document.getElementById('libSearch').value;
+            try {
+                const res = await fetch(`${API}/library?search=${encodeURIComponent(search)}&sort=${currentSort}`);
+                if (!res.ok) { handleServerError(); return; }
+                const data = await res.json();
+
+    
+
+                const list = document.getElementById('libList'); list.innerHTML = '';
+                data.forEach(item => {
+                    const div = document.createElement('div'); div.className = 'lib-item';
+                    const words = item.input_words ? "Input: " + item.input_words.split(',').join(", ") : "";
+                    div.innerHTML = `<div class="lib-head"><span>${item.start_word} &rarr; ${item.end_word}</span> <span class="lib-meta">${item.views} views</span></div><div class="lib-words">${words}</div>`;
+                    div.onclick = () => { 
+                                            // Visual Increment: Only if not already loaded in memory
+                                            if (!relationshipCache.has(item.id)) {
+                                                const meta = div.querySelector('.lib-meta');
+                                                const current = meta.textContent.split(" ")[0] - 1 + 1; // to string but lazy
+                                                if (!isNaN(current)) meta.textContent = `${current + 1} views`;
+                                            }
+
+                                            // Standard Load
+                                            try { window.history.pushState({}, '', `?rel=${item.id}`); } catch (e) {}
+                                            loadRelationship(item.id); 
+                                    };
+                    list.appendChild(div);
+                });
+            } catch(e) { handleServerError(); }
+        }
+
+        function handleInput() { clearTimeout(debounceTimer); debounceTimer = setTimeout(runCalculation, 300); }
+        function handleSlider(v) { document.getElementById('stepsDisplay').textContent = v; renderTable(); runCalculation(); }
+        function addRow() { rows.push({id:Date.now(), word:'new'}); renderTable(); runCalculation(); }
+        // FIXED: String conversion ensures both number IDs (from Date.now) and string IDs match correctly
+        function deleteRow(id) { rows = rows.filter(r => String(r.id) !== String(id)); renderTable(); runCalculation(); }
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+        function toggleTheme() { document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark'); }
+        async function openShare() { if(await saveCurrent(false)) document.getElementById('shareModal').showModal(); }
+        function copyLink() { navigator.clipboard.writeText(window.location.href); document.getElementById('copyBtn').textContent="Copied!"; setTimeout(()=>document.getElementById('copyBtn').textContent="Copy Link", 2000); }
+        function tweetLink() { window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(window.location.href)}`, '_blank'); }
+        function setSort(type) { currentSort=type; loadLibrary(); }
+
+        function renderTable() {
+            const con = document.getElementById('tableContainer');
+            const steps = parseInt(document.getElementById('steps').value);
+            con.innerHTML = '';
+            const head = document.createElement('div'); head.className='grid-row grid-header';
+            head.innerHTML = `<div class="cell cell-del"></div>`;
+            for(let i=steps; i>=1; i--) head.innerHTML += `<div class="cell">← ${i}</div>`;
+            head.innerHTML += `<div class="cell cell-input">📍 INPUT</div>`;
+            for(let i=1; i<=steps; i++) head.innerHTML += `<div class="cell">${i} →</div>`;
+            con.appendChild(head);
+            rows.forEach(r => {
+                // FIXED: IDs are now quoted properly in HTML generation
+                const div = document.createElement('div'); div.className='grid-row'; div.id=`row-${r.id}`;
+                let html = `<div class="cell cell-del"><button class="del-btn" onclick="deleteRow('${r.id}')">✕</button></div>`;
+                for(let i=steps; i>=1; i--) html += `<div class="cell" id="cell-${r.id}--${i}"></div>`;
+                html += `<div class="cell cell-input"><input type="text" value="${r.word}" oninput="rows.find(x=>x.id=='${r.id}').word=this.value; handleInput()"></div>`;
+                for(let i=1; i<=steps; i++) html += `<div class="cell" id="cell-${r.id}-${i}"></div>`;
+                div.innerHTML = html;
+                con.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>

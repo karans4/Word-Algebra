@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Load Benchmark</title>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ff4b4b;
+            --bg-body: #0e1117;
+            --bg-panel: #262730;
+            --text-main: #fafafa;
+            --text-sub: #808495;
+            --border: rgba(250, 250, 250, 0.1);
+            --success: #09ab3b;
+            --error: #ff4b4b;
+        }
+
+        body { font-family: "Source Sans Pro", sans-serif; background-color: var(--bg-body); color: var(--text-main); margin: 0; padding: 40px; }
+        
+        .container { max-width: 1000px; margin: 0 auto; }
+        
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        h1 { margin: 0; font-size: 1.8rem; }
+        
+        .controls { display: flex; gap: 10px; align-items: center; }
+        input[type="number"] {
+            background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-main);
+            padding: 10px; border-radius: 4px; font-weight: bold; width: 80px;
+        }
+
+        button {
+            background-color: var(--primary); color: white; border: none; padding: 10px 20px;
+            border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 1rem;
+            transition: background 0.2s;
+        }
+        button:hover { background-color: #ff2b2b; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .progress-container { margin-bottom: 20px; background: var(--bg-panel); height: 8px; border-radius: 4px; overflow: hidden; }
+        .progress-bar { height: 100%; background: var(--primary); width: 0%; transition: width 0.1s linear; }
+
+        .card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); color: var(--text-sub); font-size: 0.85rem; text-transform: uppercase; }
+        td { padding: 12px; border-bottom: 1px solid var(--border); font-family: monospace; font-size: 0.95rem; }
+        tr:last-child td { border-bottom: none; }
+        
+        .metric { font-weight: bold; }
+        .fast { color: var(--success); }
+        .slow { color: var(--error); }
+        .med { color: #ffbd45; }
+        
+        .final-stats { display: flex; justify-content: space-around; text-align: center; }
+        .final-stat-box h3 { margin: 0 0 5px 0; color: var(--text-sub); font-size: 0.9rem; }
+        .final-stat-box div { font-size: 1.5rem; font-weight: bold; }
+
+        /* LOG STYLES */
+        .log-header { display: flex; padding: 8px 12px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase; color: var(--text-sub); border-bottom: 1px solid var(--border); }
+        .log-container { max-height: 400px; overflow-y: auto; background: #1e2025; border: 1px solid var(--border); border-radius: 4px; }
+        .log-entry { display: flex; align-items: center; padding: 6px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); font-family: monospace; font-size: 0.8rem; color: var(--text-sub); transition: background 0.1s; }
+        .log-entry:hover { background: rgba(255,255,255,0.05); color: var(--text-main); }
+        
+        .log-col-time { width: 80px; color: var(--text-sub); opacity: 0.7; }
+        .log-col-method { width: 60px; font-weight: bold; }
+        .log-col-url { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 10px; }
+        .log-col-status { width: 50px; font-weight: bold; }
+        .log-col-lat { width: 70px; text-align: right; margin-right: 10px; }
+        .log-col-view { width: 60px; text-align: right; }
+        
+        .method-GET { color: #61afef; }
+        .method-POST { color: #98c379; }
+        .status-200 { color: var(--success); }
+        .status-err { color: var(--error); }
+
+        .view-btn { 
+            background: transparent; border: 1px solid var(--border); color: var(--text-sub); 
+            padding: 2px 6px; font-size: 0.7rem; border-radius: 3px; cursor: pointer; 
+        }
+        .view-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+        /* MODAL */
+        dialog { 
+            background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border); 
+            border-radius: 8px; padding: 0; width: 80%; max-width: 600px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+        dialog::backdrop { background: rgba(0,0,0,0.7); }
+        .modal-header { padding: 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+        .modal-body { padding: 15px; max-height: 500px; overflow-y: auto; }
+        pre { margin: 0; white-space: pre-wrap; word-break: break-all; font-family: monospace; color: #a9b7c6; font-size: 0.85rem; }
+        .close-btn { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; color: var(--text-sub); }
+        .close-btn:hover { color: var(--text-main); }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>⚡ System Load Benchmark</h1>
+            <div class="controls">
+                <label style="font-weight:600; color:var(--text-sub)">Iterations:</label>
+                <input type="number" id="iterInput" value="50" min="10" max="1000">
+                <button id="runBtn" onclick="runLoadTest()">▶ Run Load Test</button>
+            </div>
+        </header>
+
+        <div class="progress-container">
+            <div id="progressBar" class="progress-bar"></div>
+        </div>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 25%">Test Name</th>
+                        <th style="width: 10%">Reqs</th>
+                        <th style="width: 15%">Avg (ms)</th>
+                        <th style="width: 15%">Median (ms)</th>
+                        <th style="width: 15%">Min / Max</th>
+                        <th style="width: 10%">Errors</th>
+                        <th style="width: 10%">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsTable">
+                    <tr><td colspan="7" style="text-align:center; color: var(--text-sub)">Ready to benchmark...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="summary" class="card" style="display:none;">
+            <div class="final-stats">
+                <div class="final-stat-box">
+                    <h3>Total Requests</h3>
+                    <div id="totalReqs">0</div>
+                </div>
+                <div class="final-stat-box">
+                    <h3>Total Time</h3>
+                    <div id="totalDuration">0s</div>
+                </div>
+                <div class="final-stat-box">
+                    <h3>Avg Latency</h3>
+                    <div id="globalAvg">0ms</div>
+                </div>
+                <div class="final-stat-box">
+                    <h3>Success Rate</h3>
+                    <div id="successRate" style="color:var(--success)">100%</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3 style="margin:0">Live Request Log</h3>
+                <label style="font-size:0.85rem; cursor:pointer; display:flex; align-items:center; gap:6px;">
+                    <input type="checkbox" id="enableLogging" checked> Show Individual Requests
+                </label>
+            </div>
+            <div class="log-header">
+                <span style="width: 80px">Time</span>
+                <span style="width: 60px">Method</span>
+                <span style="flex: 1">Endpoint</span>
+                <span style="width: 50px">Status</span>
+                <span style="width: 70px; text-align:right; margin-right:10px;">Latency</span>
+                <span style="width: 60px; text-align:right;">Resp</span>
+            </div>
+            <div id="requestLog" class="log-container">
+                <div style="padding:12px; text-align:center; color:var(--text-sub); font-size:0.85rem;">Waiting to start...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Response Modal -->
+    <dialog id="responseDialog">
+        <div class="modal-header">
+            <span id="modalTitle">Response Details</span>
+            <button class="close-btn" onclick="document.getElementById('responseDialog').close()">✕</button>
+        </div>
+        <div class="modal-body">
+            <pre id="modalContent"></pre>
+        </div>
+    </dialog>
+
+    <script>
+        const API = 'http://127.0.0.1:5000/api';
+        
+        // --- DIVERSE WORD POOL (Common Nouns/Concepts) ---
+        const WORD_POOL = [
+            "time", "person", "year", "way", "day", "thing", "man", "world", "life", "hand", 
+            "part", "child", "eye", "woman", "place", "work", "week", "case", "point", "government", 
+            "company", "number", "group", "problem", "fact", "idea", "water", "money", "story", 
+            "mother", "father", "night", "study", "book", "job", "word", "business", "issue", "side", 
+            "kind", "head", "house", "service", "friend", "power", "hour", "game", "line", "end", 
+            "member", "law", "car", "city", "community", "name", "president", "team", "minute", 
+            "idea", "kid", "body", "information", "back", "parent", "face", "others", "level", 
+            "office", "door", "health", "art", "war", "history", "party", "result", "change", 
+            "morning", "reason", "research", "girl", "guy", "food", "moment", "air", "teacher", 
+            "force", "education", "king", "queen", "actor", "dog", "cat", "run", "sky", "blue"
+        ];
+        
+        function getRandomWord() { return WORD_POOL[Math.floor(Math.random() * WORD_POOL.length)]; }
+
+        // Define Tests
+        const testDefs = [
+            {
+                id: 'suggestions_std',
+                name: 'Suggestions (Hit)',
+                method: 'GET',
+                dynamic: true,
+                base_url: '/suggestions?word=',
+                getParams: () => ({ url: `/suggestions?word=${getRandomWord()}` })
+            },
+            {
+                id: 'suggestions_miss',
+                name: 'Suggestions (Miss)',
+                method: 'GET',
+                dynamic: false,
+                url: '/suggestions?word=xylophone_invalid_word_123'
+            },
+            {
+                id: 'calc_light',
+                name: 'Calc (Light)',
+                method: 'POST',
+                dynamic: true,
+                url: '/calculate',
+                getParams: () => ({
+                    body: { 
+                        start_word: getRandomWord(), 
+                        end_word: getRandomWord(), 
+                        steps: 1, 
+                        test_words: [{id:'1', word: getRandomWord()}] 
+                    }
+                })
+            },
+            {
+                id: 'calc_heavy',
+                name: 'Calc (Heavy)',
+                method: 'POST',
+                dynamic: true,
+                url: '/calculate',
+                getParams: () => ({
+                    body: { 
+                        start_word: getRandomWord(), 
+                        end_word: getRandomWord(), 
+                        steps: 5, 
+                        test_words: [
+                            {id:'1', word: getRandomWord()}, {id:'2', word: getRandomWord()}, 
+                            {id:'3', word: getRandomWord()}, {id:'4', word: getRandomWord()}, 
+                            {id:'5', word: getRandomWord()}
+                        ] 
+                    }
+                })
+            },
+            {
+                id: 'save_rel',
+                name: 'Save DB',
+                method: 'POST',
+                dynamic: true,
+                url: '/save',
+                storeId: true,
+                getParams: () => ({
+                    body: { 
+                        start_word: getRandomWord(), 
+                        end_word: getRandomWord(), 
+                        depth: 2, 
+                        test_words: [{id:'1', word: getRandomWord()}] 
+                    }
+                })
+            },
+            {
+                id: 'load_rel',
+                name: 'Load DB',
+                method: 'GET',
+                dynamic: false,
+                url: '/load?id={ID}',
+                useStoredId: true
+            }
+        ];
+
+        // State
+        let stats = {};
+        let storedId = null;
+
+        function initStats() {
+            stats = {};
+            testDefs.forEach(t => {
+                stats[t.id] = {
+                    durations: [],
+                    errors: 0,
+                    min: Infinity,
+                    max: -Infinity
+                };
+            });
+        }
+
+        async function runLoadTest() {
+            const btn = document.getElementById('runBtn');
+            const iterInput = document.getElementById('iterInput');
+            const pBar = document.getElementById('progressBar');
+            const logContainer = document.getElementById('requestLog');
+            const summary = document.getElementById('summary');
+
+            const iterations = parseInt(iterInput.value) || 50;
+            
+            btn.disabled = true;
+            iterInput.disabled = true;
+            summary.style.display = 'none';
+            pBar.style.width = '0%';
+            logContainer.innerHTML = ''; 
+            
+            initStats();
+            renderTable();
+
+            const startTime = performance.now();
+
+            for (let i = 0; i < iterations; i++) {
+                for (let tIndex = 0; tIndex < testDefs.length; tIndex++) {
+                    const test = testDefs[tIndex];
+                    await runSingleTest(test);
+                }
+
+                if (i % 5 === 0 || i === iterations - 1) {
+                    renderTable();
+                    pBar.style.width = `${((i + 1) / iterations) * 100}%`;
+                }
+                
+                if(i % 5 === 0) await new Promise(r => setTimeout(r, 0));
+            }
+
+            const totalTimeMs = performance.now() - startTime;
+            renderFinalStats(totalTimeMs, iterations);
+            
+            btn.disabled = false;
+            iterInput.disabled = false;
+        }
+
+        async function runSingleTest(test) {
+            const stat = stats[test.id];
+            const start = performance.now();
+            let success = false;
+            let statusCode = 0;
+            let finalUrl = test.url;
+            let body = test.body;
+            let responseData = null;
+
+            // DYNAMIC PARAMS
+            if (test.dynamic && test.getParams) {
+                const dynamic = test.getParams();
+                if (dynamic.url) finalUrl = dynamic.url;
+                if (dynamic.body) body = dynamic.body;
+            }
+
+            try {
+                let url = API + (finalUrl || test.url);
+                if (test.useStoredId) {
+                    if (storedId) {
+                        url = url.replace('{ID}', encodeURIComponent(storedId));
+                        finalUrl = (finalUrl || test.url).replace('{ID}', storedId);
+                    } else {
+                        return; // Skip if no ID
+                    }
+                }
+
+                const opts = { method: test.method };
+                if (test.method === 'POST') {
+                    opts.headers = { 'Content-Type': 'application/json' };
+                    opts.body = JSON.stringify(body);
+                }
+
+                const res = await fetch(url, opts);
+                statusCode = res.status;
+                
+                const text = await res.text();
+                try {
+                    responseData = JSON.parse(text);
+                } catch(e) {
+                    responseData = text;
+                }
+
+                if (res.ok) {
+                    success = true;
+                    if (test.storeId && responseData.id) storedId = responseData.id;
+                }
+            } catch (e) {
+                statusCode = 'ERR';
+                console.error(e);
+                responseData = { error: e.toString() };
+            }
+
+            const duration = performance.now() - start;
+
+            // LOGGING
+            if (document.getElementById('enableLogging').checked) {
+                addLogEntry(test.method, finalUrl, statusCode, duration, responseData);
+            }
+
+            if (success) {
+                stat.durations.push(duration);
+                if (duration < stat.min) stat.min = duration;
+                if (duration > stat.max) stat.max = duration;
+            } else {
+                stat.errors++;
+            }
+        }
+
+        function addLogEntry(method, url, status, duration, response) {
+            const container = document.getElementById('requestLog');
+            const now = new Date();
+            const timeStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+            
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            
+            const statusClass = status >= 200 && status < 300 ? 'status-200' : 'status-err';
+            
+            // Store response in DOM property
+            div.respData = response;
+
+            div.innerHTML = `
+                <div class="log-col-time">${timeStr}</div>
+                <div class="log-col-method method-${method}">${method}</div>
+                <div class="log-col-url" title="${url}">${url}</div>
+                <div class="log-col-status ${statusClass}">${status}</div>
+                <div class="log-col-lat">${duration.toFixed(0)} ms</div>
+                <div class="log-col-view"><button class="view-btn">View JSON</button></div>
+            `;
+            
+            // Add Click Handler
+            const btn = div.querySelector('.view-btn');
+            btn.onclick = () => showResponseModal(response, url);
+
+            container.insertBefore(div, container.firstChild);
+            
+            if (container.children.length > 100) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        function showResponseModal(data, title) {
+            const dialog = document.getElementById('responseDialog');
+            const content = document.getElementById('modalContent');
+            const titleEl = document.getElementById('modalTitle');
+            
+            titleEl.textContent = title;
+            content.textContent = JSON.stringify(data, null, 2);
+            dialog.showModal();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('resultsTable');
+            tbody.innerHTML = '';
+
+            testDefs.forEach(test => {
+                const s = stats[test.id];
+                const count = s.durations.length + s.errors;
+                
+                let avg = 0, median = 0;
+                if (s.durations.length > 0) {
+                    const sum = s.durations.reduce((a, b) => a + b, 0);
+                    avg = sum / s.durations.length;
+                    
+                    const sorted = [...s.durations].sort((a, b) => a - b);
+                    const mid = Math.floor(sorted.length / 2);
+                    median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+                }
+
+                const minStr = s.min === Infinity ? '-' : s.min.toFixed(0);
+                const maxStr = s.max === -Infinity ? '-' : s.max.toFixed(0);
+                const latencyClass = avg < 50 ? 'fast' : (avg < 200 ? 'med' : 'slow');
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${test.name}</td>
+                    <td>${count}</td>
+                    <td class="metric ${latencyClass}">${avg.toFixed(2)}</td>
+                    <td>${median.toFixed(2)}</td>
+                    <td style="font-size:0.85em; color:var(--text-sub)">${minStr} / ${maxStr}</td>
+                    <td>${s.errors > 0 ? `<span style="color:var(--error)">${s.errors}</span>` : '0'}</td>
+                    <td><div style="width:10px; height:10px; border-radius:50%; background-color:${count > 0 ? 'var(--success)' : '#555'}; display:inline-block"></div></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderFinalStats(totalTimeMs, iterations) {
+            const summary = document.getElementById('summary');
+            summary.style.display = 'block';
+
+            let totalReqs = 0;
+            let totalErrs = 0;
+            let globalSum = 0;
+            let globalCount = 0;
+
+            Object.values(stats).forEach(s => {
+                totalReqs += s.durations.length + s.errors;
+                totalErrs += s.errors;
+                if (s.durations.length > 0) {
+                    globalSum += s.durations.reduce((a,b)=>a+b, 0);
+                    globalCount += s.durations.length;
+                }
+            });
+
+            const globalAvg = globalCount > 0 ? (globalSum / globalCount).toFixed(2) : 0;
+            const successRate = totalReqs > 0 ? (((totalReqs - totalErrs) / totalReqs) * 100).toFixed(1) : 0;
+
+            document.getElementById('totalReqs').textContent = totalReqs;
+            document.getElementById('totalDuration').textContent = (totalTimeMs / 1000).toFixed(2) + 's';
+            document.getElementById('globalAvg').textContent = globalAvg + 'ms';
+            
+            const srEl = document.getElementById('successRate');
+            srEl.textContent = successRate + '%';
+            srEl.style.color = successRate > 99 ? 'var(--success)' : 'var(--error)';
+        }
+    </script>
+</body>
+</html>

@@ -8,7 +8,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}=======================================${NC}"
-echo -e "${BLUE}   🧬 Vector Dictionary Setup Wizard   ${NC}"
+echo -e "${BLUE}   🧬 Word Algebra Setup Wizard   ${NC}"
 echo -e "${BLUE}=======================================${NC}"
 
 # 1. Check for Python

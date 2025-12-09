@@ -2,8 +2,8 @@ import numpy as np
 import os
 
 # --- CONFIGURATION ---
-INPUT_VOCAB_FILE = "vocab.txt"
-INPUT_VECTORS_FILE = "embeddings.npy"
+INPUT_VOCAB_FILE = "vocab_v2.txt"
+INPUT_VECTORS_FILE = "embeddings_v2.npy"
 OUTPUT_VOCAB_FILE = "diverse_5k_vocab.txt"
 OUTPUT_VECTORS_FILE = "diverse_5k_embeddings.npy"
 SUGGESTIONS_FILE = "suggestions_index.npy"

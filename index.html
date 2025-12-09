@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Word Algebra</title>
-    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         /* --- RESTORED CSS VARIABLES (The "Good" Theme) --- */
         :root {
@@ -34,7 +33,9 @@
 
         * { box-sizing: border-box; }
         body { font-family: var(--font-stack); margin: 0; background-color: var(--bg-body); color: var(--text-main); font-size: 15px; }
-        
+		/* Make all links look like buttons */
+
+   
         /* --- LAYOUT --- */
         .main-content { 
             max-width: 1200px; margin: 0 auto; padding: 30px 1.5rem; transition: margin-left 0.3s;
@@ -84,11 +85,15 @@
             position: fixed; top: 0; left: 0; width: 100%; z-index: 2000; transform: translateY(-100%); transition: transform 0.3s;
         }
         .server-error-banner.visible { transform: translateY(0); }
-
-        button { cursor: pointer; background-color: transparent; color: var(--text-main); border: 1px solid var(--border); padding: 0.4rem 0.8rem; border-radius: 0.25rem; font-weight: 600; font-size: 0.85rem; transition: 0.2s; }
+		a {
+			  text-decoration: none;         /* Remove underline */
+			  display: inline-block;
+			  
+		  }
+        button, a{ cursor: pointer; background-color: transparent; color: var(--text-main); border: 1px solid var(--border); padding: 0.4rem 0.8rem; border-radius: 0.25rem; font-weight: 600; font-size: 0.85rem; transition: 0.2s; }
         button:hover { border-color: var(--primary); color: var(--primary); }
-        button.primary-btn { background-color: var(--primary); color: white; border: 1px solid var(--primary); }
-        button.primary-btn:hover { background-color: #ff2b2b; color: white; }
+        button.primary-btn, a { background-color: var(--primary); color: white; border: 1px solid var(--primary); }
+        button.primary-btn:hover, a:hover { background-color: #ff2b2b; color: white;   transform: translateY(-1px);   /* Subtle lift effect */ }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .panel { margin-bottom: 1.5rem; }
@@ -257,499 +262,439 @@
         <div style="margin-top:20px; text-align:center;">
             <button id="addBtn" onclick="addRow()" style="width:100%;">+ Add Test Row</button>
         </div>
+		<p> *For speed reasons, there are 400,000+ words in the input vocabulary, but only 5,000 in the output vocabulary. It may end up choosing a word that's "close enough"'</p> <p> <a href="placeholder">Read more about the architecture of this web app</a></p>
     </div>
 
-    <script>
-		// --- DYNAMIC API CONFIGURATION ---
-		const getApiUrl = () => {
-		    const p = window.location.protocol;
-    
-		    // 1. Handle special browser protocols
-		    if (p === 'blob:' || p === 'about:' || p === 'file:') {
-		        return 'http://127.0.0.1:5000/api';
-		    }
+  <script>
+          // --- DYNAMIC API CONFIGURATION ---
+          const getApiUrl = () => {
+              const p = window.location.protocol;
+              if (p === 'blob:' || p === 'about:' || p === 'file:') return 'http://127.0.0.1:5000/api';
+              const h = window.location.hostname;
+              const port = window.location.port;
+              if ((h === 'localhost' || h === '127.0.0.1') && port !== '5000') return 'http://127.0.0.1:5000/api';
+              let currentUrl = window.location.origin + window.location.pathname;
+              if (currentUrl.endsWith('/')) currentUrl = currentUrl.slice(0, -1);
+              return `${currentUrl}/api`;
+          };
 
-		    const h = window.location.hostname;
-		    const port = window.location.port;
+          const API = getApiUrl();
+          console.log("🔗 API Connected to:", API);
 
-		    // 2. Handle Localhost Dev (Frontend 3000 -> Backend 5000)
-		    if ((h === 'localhost' || h === '127.0.0.1') && port !== '5000') {
-		            return 'http://127.0.0.1:5000/api';
-		    }
+          // --- GLOBAL ERROR HANDLING ---
+          function handleServerError() {
+              document.getElementById('serverError').classList.add('visible');
+              setTimeout(() => document.getElementById('serverError').classList.remove('visible'), 5000);
+          }
 
-		    // 3. Get Origin + Path (ignores query params like ?id=123)
-		    // Example: https://site.com/dashboard/user
-		    let currentUrl = window.location.origin + window.location.pathname;
-
-		    // 4. Remove trailing slash if present (e.g., /dashboard/ -> /dashboard)
-		    if (currentUrl.endsWith('/')) {
-		        currentUrl = currentUrl.slice(0, -1);
-		    }
-
-		    // Returns: https://site.com/dashboard/user/api
-		    return `${currentUrl}/api`;
-		};
-
-		const API = getApiUrl();
-        console.log("🔗 API Connected to:", API);
-
-        // --- GLOBAL ERROR HANDLING ---
-        function handleServerError() {
-            document.getElementById('serverError').classList.add('visible');
-            setTimeout(() => document.getElementById('serverError').classList.remove('visible'), 5000);
-        }
-
-        // --- CACHES ---
-        const relationshipCache = new Map(); // Library views
-        const suggestionCache = new Map();   // Autocomplete suggestions
+          // --- CACHES ---
+          const relationshipCache = new Map();
+          const suggestionCache = new Map();
         
-        // --- VECTOR MATH ENGINE (CLIENT SIDE) ---
-        class VectorSystem {
-            constructor() {
-                this.vocab = [];
-                this.vocabMap = new Map(); // O(1) Lookup
-                this.matrix = null; // Float32Array
-                this.dim = 384;
-                this.ready = false;
-                this.cache = {}; // L1 Cache (Input vectors - Results)
-                this.inflight = new Map(); // L1.5 Cache (In-Flight Promises - Deduplication)
-            }
+          // --- VECTOR MATH ENGINE (CLIENT SIDE) ---
+          class VectorSystem {
+              constructor() {
+                  this.vocab = [];
+                  this.vocabMap = new Map();
+                  this.matrix = null;
+                  this.dim = 384;
+                  this.ready = false;
+                  this.cache = {}; 
+                  this.inflight = new Map();
+              }
 
-            async init(onProgress) {
-                try {
-                    const res = await fetch(`${API}/matrix`);
-                    if (!res.ok) {
-                        handleServerError();
-                        console.error(await res.text());
-                        return;
-                    }
-                    const total = parseInt(res.headers.get('content-length'), 10);
-                    let loaded = 0;
-                    const reader = res.body.getReader();
-                    const chunks = [];
-                    while(true) {
-                        const {done, value} = await reader.read();
-                        if (done) break;
-                        chunks.push(value);
-                        loaded += value.byteLength;
-                        if(total) onProgress(loaded / total);
-                    }
-                    const text = await new Blob(chunks).text();
-                    if(text.trim().startsWith('<')) throw new Error("Invalid JSON");
-                    const data = JSON.parse(text);
+              async init(onProgress) {
+                  try {
+                      const res = await fetch(`${API}/matrix`);
+                      if (!res.ok) { handleServerError(); return; }
+                      const total = parseInt(res.headers.get('content-length'), 10);
+                      let loaded = 0;
+                      const reader = res.body.getReader();
+                      const chunks = [];
+                      while(true) {
+                          const {done, value} = await reader.read();
+                          if (done) break;
+                          chunks.push(value);
+                          loaded += value.byteLength;
+                          if(total) onProgress(loaded / total);
+                      }
+                      const text = await new Blob(chunks).text();
+                      if(text.trim().startsWith('<')) throw new Error("Invalid JSON");
+                      const data = JSON.parse(text);
                     
-                    this.vocab = data.vocab;
-                    // Build O(1) Map for L2 Cache
-                    data.vocab.forEach((w, i) => this.vocabMap.set(w.toLowerCase(), i));
-                    
-                    this.matrix = new Float32Array(data.vectors);
-                    this.ready = true;
-                } catch (e) { 
-                    console.error(e); 
-                    handleServerError();
-                    alert("Failed to load Matrix. Check connection."); 
-                }
-            }
+                      this.vocab = data.vocab;
+                      data.vocab.forEach((w, i) => this.vocabMap.set(w.toLowerCase(), i));
+                      this.matrix = new Float32Array(data.vectors);
+                      this.ready = true;
+                  } catch (e) { 
+                      console.error(e); 
+                      handleServerError();
+                      alert("Failed to load Matrix. Check connection."); 
+                  }
+              }
 
-            async getInputVector(word) {
-                word = word.toLowerCase().trim();
-                
-                // 1. Check L1 Cache (Result Memory)
-                if(this.cache[word]) return this.cache[word];
-                
-                // 1.5. Check In-Flight Cache (Promise Memory)
-                // This prevents 5 simultaneous requests for "king" from firing 5 network calls
-                if (this.inflight.has(word)) {
-                    return this.inflight.get(word);
-                }
+              async getInputVector(word) {
+                  word = word.toLowerCase().trim();
+                  if(this.cache[word]) return this.cache[word];
+                  if (this.inflight.has(word)) return this.inflight.get(word);
 
-                // 2. Check L2 Cache (The 5k Matrix - Instant)
-                if (this.vocabMap.has(word)) {
-                    const idx = this.vocabMap.get(word);
-                    const start = idx * this.dim;
-                    const end = start + this.dim;
-                    const vec = this.matrix.slice(start, end);
-                    this.cache[word] = vec;
-                    return vec;
-                }
+                  if (this.vocabMap.has(word)) {
+                      const idx = this.vocabMap.get(word);
+                      const start = idx * this.dim;
+                      const end = start + this.dim;
+                      const vec = this.matrix.slice(start, end);
+                      this.cache[word] = vec;
+                      return vec;
+                  }
 
-                // Create the Fetch Promise
-                const fetchPromise = (async () => {
-                    try {
-                        const res = await fetch(`${API}/vector?word=${word}`);
-                        if(!res.ok) {
-                            if (res.status !== 404) handleServerError();
-                            return null;
-                        }
-                        const arr = await res.json();
-                        if(!arr) return null;
-                        const vec = new Float32Array(arr);
-                        
-                        // Populate Cache
-                        this.cache[word] = vec;
-                        return vec;
-                    } catch (e) { 
-                        handleServerError();
-                        return null; 
-                    } finally {
-                        // Request done, remove from in-flight
-                        this.inflight.delete(word);
-                    }
-                })();
+                  const fetchPromise = (async () => {
+                      try {
+                          const res = await fetch(`${API}/vector?word=${word}`);
+                          if(!res.ok) return null;
+                          const arr = await res.json();
+                          if(!arr) return null;
+                          const vec = new Float32Array(arr);
+                          this.cache[word] = vec;
+                          return vec;
+                      } catch (e) { return null; } 
+                      finally { this.inflight.delete(word); }
+                  })();
 
-                // Store Promise to deduplicate subsequent calls
-                this.inflight.set(word, fetchPromise);
-                return fetchPromise;
-            }
+                  this.inflight.set(word, fetchPromise);
+                  return fetchPromise;
+              }
 
-            calculateTarget(startVec, endVec, rowVec, step) {
-                const diff = new Float32Array(this.dim);
-                const target = new Float32Array(this.dim);
-                const scalar = step;
-                for(let i=0; i<this.dim; i++) diff[i] = endVec[i] - startVec[i];
-                for(let i=0; i<this.dim; i++) target[i] = rowVec[i] + (diff[i] * scalar);
-                let norm = 0;
-                for(let i=0; i<this.dim; i++) norm += target[i] * target[i];
-                norm = Math.sqrt(norm);
-                for(let i=0; i<this.dim; i++) target[i] /= norm;
-                return target;
-            }
+              findClosest(targetVec, excludeWords) {
+                  let maxScore = -2.0;
+                  let bestIdx = -1;
+                  for(let i=0; i<this.vocab.length; i++) {
+                      if(excludeWords.has(this.vocab[i])) continue;
+                      let score = 0;
+                      const offset = i * this.dim;
+                      for(let j=0; j<this.dim; j++) score += targetVec[j] * this.matrix[offset + j];
+                      if(score > maxScore) { maxScore = score; bestIdx = i; }
+                  }
+                  return bestIdx !== -1 ? this.vocab[bestIdx] : "???";
+              }
+          }
 
-            findClosest(targetVec, excludeWords) {
-                let maxScore = -2.0;
-                let bestIdx = -1;
-                for(let i=0; i<this.vocab.length; i++) {
-                    if(excludeWords.has(this.vocab[i])) continue;
-                    let score = 0;
-                    const offset = i * this.dim;
-                    for(let j=0; j<this.dim; j++) score += targetVec[j] * this.matrix[offset + j];
-                    if(score > maxScore) { maxScore = score; bestIdx = i; }
-                }
-                return bestIdx !== -1 ? this.vocab[bestIdx] : "???";
-            }
-        }
+          // --- APP LOGIC ---
+          const engine = new VectorSystem();
+          let rows = [
+              {id:'init_1', word:'man'}, 
+              {id:'init_2', word:'king'}, 
+              {id:'init_3', word:'actor'}, 
+              {id:'init_4', word:'obama'}
+          ];
+          let debounceTimer;
+          let currentSort = 'popular';
+          let isInternalUpdate = false;
 
-        // --- APP LOGIC ---
-        const engine = new VectorSystem();
-        let rows = [
-            {id:'init_1', word:'man'}, 
-            {id:'init_2', word:'king'}, 
-            {id:'init_3', word:'actor'}, 
-            {id:'init_4', word:'obama'}
-        ];
-        let debounceTimer;
-        let currentSort = 'popular';
-        let isInternalUpdate = false;
-
-        window.onload = async () => {
-            const bar = document.getElementById('loadBar');
-            const loader = document.getElementById('loader');
+          window.onload = async () => {
+              const bar = document.getElementById('loadBar');
+              const loader = document.getElementById('loader');
             
-            // 1. Initialize Engine
-            await engine.init((pct) => { if(bar) bar.style.width = (pct * 100) + '%'; });
+              await engine.init((pct) => { if(bar) bar.style.width = (pct * 100) + '%'; });
+              if (loader) { loader.style.opacity = 0; setTimeout(() => loader.remove(), 500); }
             
-            if (loader) { loader.style.opacity = 0; setTimeout(() => loader.remove(), 500); }
+              const urlParams = new URLSearchParams(window.location.search);
+              const id = urlParams.get('rel');
+              const pStart = urlParams.get('s');
             
-            // 2. Check for Permalink or State Params
-            const urlParams = new URLSearchParams(window.location.search);
-            const id = urlParams.get('rel');
-            const pStart = urlParams.get('s');
+              if (id) {
+                  await loadRelationship(id);
+              } else if (pStart) {
+                  document.getElementById('startWord').value = pStart;
+                  document.getElementById('endWord').value = urlParams.get('e') || 'woman';
+                  document.getElementById('steps').value = urlParams.get('d') || 1;
+                  document.getElementById('stepsDisplay').textContent = urlParams.get('d') || 1;
+                  const rVal = urlParams.get('r');
+                  if (rVal) rows = rVal.split(',').map((w, i) => ({ id: `url_${i}`, word: w }));
+                  isInternalUpdate = true; 
+                  renderTable();
+                  runCalculation();
+              } else {
+                  isInternalUpdate = true;
+                  renderTable();
+                  runCalculation();
+              }
+              loadLibrary();
+          };
+
+          function updateUrlState(s, e, d) {
+              if (isInternalUpdate) { isInternalUpdate = false; return; }
+              const rStr = rows.map(r => r.word).join(',');
+              const params = new URLSearchParams(window.location.search);
+              if (params.has('rel')) params.delete('rel');
+              params.set('s', s);
+              params.set('e', e);
+              params.set('d', d);
+              params.set('r', rStr);
+              try { window.history.replaceState({}, '', `?${params.toString()}`); } catch (e) {}
+          }
+
+          // --- CORE CALCULATION LOGIC (FIXED) ---
+          async function runCalculation() {
+              if(!engine.ready) return;
+              const sWord = document.getElementById('startWord').value.trim();
+              const eWord = document.getElementById('endWord').value.trim();
+              const steps = parseInt(document.getElementById('steps').value);
             
-            if (id) {
-                await loadRelationship(id);
-            } else if (pStart) {
-                document.getElementById('startWord').value = pStart;
-                document.getElementById('endWord').value = urlParams.get('e') || 'woman';
-                document.getElementById('steps').value = urlParams.get('d') || 1;
-                document.getElementById('stepsDisplay').textContent = urlParams.get('d') || 1;
-                const rVal = urlParams.get('r');
-                if (rVal) {
-                    rows = rVal.split(',').map((w, i) => ({ id: `url_${i}`, word: w }));
-                }
-                isInternalUpdate = true; // Don't trigger URL update on initial render
-                renderTable();
-                runCalculation();
-            } else {
-                isInternalUpdate = true;
-                renderTable();
-                runCalculation();
-            }
+              const errEl = document.getElementById('mainError');
+              const sInput = document.getElementById('startWord');
+              const eInput = document.getElementById('endWord');
+
+              if (sWord.toLowerCase() === eWord.toLowerCase()) {
+                  errEl.textContent = "⚠️ Start and End words cannot be the same.";
+                  errEl.classList.add('visible');
+                  return;
+              }
+
+              updateUrlState(sWord, eWord, steps);
+
+              const [sVec, eVec] = await Promise.all([
+                  engine.getInputVector(sWord),
+                  engine.getInputVector(eWord)
+              ]);
+
+              if(!sVec) sInput.classList.add('input-error'); else sInput.classList.remove('input-error');
+              if(!eVec) eInput.classList.add('input-error'); else eInput.classList.remove('input-error');
             
-            // 3. Load Library
-            loadLibrary();
-        };
+              if(!sVec || !eVec) { 
+                  errEl.textContent = "⚠️ Word not in input dictionary.";
+                  errEl.classList.add('visible'); 
+                  return; 
+              }
+              errEl.classList.remove('visible');
 
-        function updateUrlState(s, e, d) {
-            if (isInternalUpdate) { isInternalUpdate = false; return; }
-            
-            const rStr = rows.map(r => r.word).join(',');
-            const params = new URLSearchParams(window.location.search);
-            
-            if (params.has('rel')) params.delete('rel');
+              fetchSuggestions(sWord);
 
-            params.set('s', s);
-            params.set('e', e);
-            params.set('d', d);
-            params.set('r', rStr);
-            
-            try {
-                window.history.replaceState({}, '', `?${params.toString()}`);
-            } catch (e) { console.warn("URL update failed (sandbox):", e); }
-        }
+              // Calculate Difference Vector (Slope)
+              const diff = new Float32Array(engine.dim);
+              for(let i=0; i<engine.dim; i++) diff[i] = eVec[i] - sVec[i];
 
-        async function runCalculation() {
-            if(!engine.ready) return;
-            const sWord = document.getElementById('startWord').value.trim();
-            const eWord = document.getElementById('endWord').value.trim();
-            const steps = parseInt(document.getElementById('steps').value);
-            
-            const errEl = document.getElementById('mainError');
-            const sInput = document.getElementById('startWord');
-            const eInput = document.getElementById('endWord');
-
-            // --- VALIDATION: IDENTITY CHECK ---
-            if (sWord.toLowerCase() === eWord.toLowerCase()) {
-                sInput.classList.add('input-error');
-                eInput.classList.add('input-error');
-                errEl.textContent = "⚠️ Start and End words cannot be the same.";
-                errEl.classList.add('visible');
-                return;
-            }
-
-            updateUrlState(sWord, eWord, steps);
-
-            // Promise.all allows these to run in parallel, and our new engine.getInputVector
-            // will ensure only 1 request per unique word is actually sent to network
-            const [sVec, eVec] = await Promise.all([
-                engine.getInputVector(sWord),
-                engine.getInputVector(eWord)
-            ]);
-
-            if(!sVec) sInput.classList.add('input-error'); else sInput.classList.remove('input-error');
-            if(!eVec) eInput.classList.add('input-error'); else eInput.classList.remove('input-error');
-            
-            if(!sVec || !eVec) { 
-                errEl.textContent = "⚠️ Word not in input dictionary.";
-                errEl.classList.add('visible'); 
-                return; 
-            }
-            errEl.classList.remove('visible');
-
-            fetchSuggestions(sWord);
-
-            for(let row of rows) {
-                const rowVec = await engine.getInputVector(row.word);
-                // FIXED: Use escaped selector for safety with dynamic IDs
-                const rowInput = document.querySelector(`div[id="row-${row.id}"] input`);
-                
-                if(!rowVec) {
-                    if(rowInput) rowInput.parentElement.classList.add('input-error');
-                    for(let i=1; i<=5; i++) {
-                         let elF = document.getElementById(`cell-${row.id}-${i}`);
-                         let elB = document.getElementById(`cell-${row.id}--${i}`);
-                         if(elF) elF.textContent = "-";
-                         if(elB) elB.textContent = "-";
-                    }
-                    continue;
-                }
-                if(rowInput) rowInput.parentElement.classList.remove('input-error');
-
-                // UPDATED EXCLUSION: Only exclude the current row word
-                let excludeFwd = new Set([row.word.toLowerCase()]);
-                let excludeBwd = new Set([row.word.toLowerCase()]);
-
-                for(let i=1; i<=steps; i++) {
-                    const tFwd = engine.calculateTarget(sVec, eVec, rowVec, i);
-                    const resFwd = engine.findClosest(tFwd, excludeFwd);
-                    excludeFwd.add(resFwd);
-                    updateCell(row.id, i, resFwd, 'next-text');
-
-                    const tBwd = engine.calculateTarget(sVec, eVec, rowVec, -i);
-                    const resBwd = engine.findClosest(tBwd, excludeBwd);
-                    excludeBwd.add(resBwd);
-                    updateCell(row.id, -i, resBwd, 'prev-text');
-                }
-                for(let i=steps+1; i<=5; i++) { updateCell(row.id, i, ""); updateCell(row.id, -i, ""); }
-            }
-        }
-
-        function updateCell(rid, step, txt, cls) {
-            const el = document.getElementById(`cell-${rid}-${step}`);
-            if(!el) return;
-            if(el.textContent !== txt) { el.textContent = txt; el.className = `cell ${cls || ''} animate-pop`; }
-        }
-
-        async function fetchSuggestions(word) {
-            
-            // --- CACHE CHECK ---
-            if (suggestionCache.has(word)) {
-                renderSuggestions(suggestionCache.get(word));
-                return;
-            }
-
-            try {
-                const res = await fetch(`${API}/suggestions?word=${word}`);
-                if (!res.ok) return;
-                const data = await res.json();
-                
-                // --- SAVE TO CACHE ---
-                suggestionCache.set(word, data);
-                
-                renderSuggestions(data);
-            } catch(e) {}
-        }
-
-        function renderSuggestions(data) {
-            const area = document.getElementById('suggestionArea');
-            area.innerHTML = '';
-            const mk = (t, l) => {
-                const d = document.createElement('div'); d.className='chip'; 
-                d.innerHTML=`<b>${l}:</b> ${t}`; 
-                d.onclick=()=>{document.getElementById('endWord').value=t; handleInput()};
-                return d; 
-            };
-            data.neighbors.forEach(w => area.appendChild(mk(w, '📍 Neighbor ')));
-            data.wildcards.forEach(w => area.appendChild(mk(w, '🎲 Wildcard ')));
-        }
-
-        async function saveCurrent(showSidebar) {
-            const s = document.getElementById('startWord').value;
-            const e = document.getElementById('endWord').value;
-            const d = parseInt(document.getElementById('steps').value);
-            try {
-                const res = await fetch(`${API}/save`, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ start_word: s, end_word: e, depth: d, test_words: rows })
-                });
-                const data = await res.json();
-                if(data.error) throw new Error(data.error);
-                
-                // --- WRITE-THROUGH CACHING ---
-                // We just created this state, so we know exactly what it is.
-                // Store it in cache so if we visit this ID later, we don't fetch.
-                const currentState = {
-                    start: s,
-                    end: e,
-                    depth: d,
-                    words: rows.map(r => r.word)
-                };
-                relationshipCache.set(data.id, currentState);
-
-                isInternalUpdate = true; 
-                try {
-                    window.history.pushState({}, '', `?rel=${encodeURIComponent(data.id)}`);
-                } catch(e) { console.warn("History push failed:", e); }
-                
-                if (showSidebar) { setSort('newest'); loadLibrary(); toggleSidebar(); }
-                return true;
-            } catch(e) { 
-                handleServerError();
-                alert("Save failed. Server may be unreachable."); 
-                return false; 
-            }
-        }
-
-        async function loadRelationship(id) {
-            // CACHE CHECK: If we already have this ID, use local data and skip API call
-            if (relationshipCache.has(id)) {
-                console.log("⚡ Loaded from Client Cache:", id);
-                const data = relationshipCache.get(id);
-                applyDataToUI(data);
-                return;
-            }
-
-            try {
-                const res = await fetch(`${API}/load?id=${encodeURIComponent(id)}`);
-                if(!res.ok) { handleServerError(); return; }
-                
-                const data = await res.json();
-                
-                // SAVE TO CACHE
-                relationshipCache.set(id, data);
-                
-                applyDataToUI(data);
-            } catch(e) { 
-                console.error(e); 
-                handleServerError(); 
-            }
-        }
-
-        function applyDataToUI(data) {
-            document.getElementById('startWord').value = data.start;
-            document.getElementById('endWord').value = data.end;
-            document.getElementById('steps').value = data.depth;
-            document.getElementById('stepsDisplay').textContent = data.depth;
-            rows = data.words.map((w, i) => ({ id: `load_${i}`, word: w }));
-            
-            isInternalUpdate = true; 
-            renderTable();
-            runCalculation(); 
-        }
-
-        async function loadLibrary() {
-            const search = document.getElementById('libSearch').value;
-            try {
-                const res = await fetch(`${API}/library?search=${encodeURIComponent(search)}&sort=${currentSort}`);
-                if (!res.ok) { handleServerError(); return; }
-                const data = await res.json();
-
+              for(let row of rows) {
+                  const rowInput = document.querySelector(`div[id="row-${row.id}"] input`);
+                  let currentVecFwd = await engine.getInputVector(row.word);
+                  let currentVecBwd = await engine.getInputVector(row.word); 
     
+                  if(!currentVecFwd) {
+                      if(rowInput) rowInput.parentElement.classList.add('input-error');
+                      continue;
+                  }
+                  if(rowInput) rowInput.parentElement.classList.remove('input-error');
 
-                const list = document.getElementById('libList'); list.innerHTML = '';
-                data.forEach(item => {
-                    const div = document.createElement('div'); div.className = 'lib-item';
-                    const words = item.input_words ? "Input: " + item.input_words.split(',').join(", ") : "";
-                    div.innerHTML = `<div class="lib-head"><span>${item.start_word} &rarr; ${item.end_word}</span> <span class="lib-meta">${item.views} views</span></div><div class="lib-words">${words}</div>`;
-                    div.onclick = () => { 
-                                            // Visual Increment: Only if not already loaded in memory
-                                            if (!relationshipCache.has(item.id)) {
-                                                const meta = div.querySelector('.lib-meta');
-                                                const current = meta.textContent.split(" ")[0] - 1 + 1; // to string but lazy
-                                                if (!isNaN(current)) meta.textContent = `${current + 1} views`;
-                                            }
+                  // --- EXCLUSION HISTORY (Prevents loops A->B->A) ---
+                  let historyFwd = new Set([row.word.toLowerCase()]);
+                  let historyBwd = new Set([row.word.toLowerCase()]);
 
-                                            // Standard Load
-                                            try { window.history.pushState({}, '', `?rel=${item.id}`); } catch (e) {}
-                                            loadRelationship(item.id); 
-                                    };
-                    list.appendChild(div);
-                });
-            } catch(e) { handleServerError(); }
-        }
+                  // --- FORWARD CHAIN (1 to 5) ---
+                  for(let i=1; i<=steps; i++) {
+                      const target = new Float32Array(engine.dim);
+                      for(let k=0; k<engine.dim; k++) target[k] = currentVecFwd[k] + diff[k];
+    
+                      let norm = 0;
+                      for(let k=0; k<engine.dim; k++) norm += target[k] * target[k];
+                      norm = Math.sqrt(norm);
+                      if (norm > 0) for(let k=0; k<engine.dim; k++) target[k] /= norm;
 
-        function handleInput() { clearTimeout(debounceTimer); debounceTimer = setTimeout(runCalculation, 300); }
-        function handleSlider(v) { document.getElementById('stepsDisplay').textContent = v; renderTable(); runCalculation(); }
-        function addRow() { rows.push({id:Date.now(), word:'new'}); renderTable(); runCalculation(); }
-        // FIXED: String conversion ensures both number IDs (from Date.now) and string IDs match correctly
-        function deleteRow(id) { rows = rows.filter(r => String(r.id) !== String(id)); renderTable(); runCalculation(); }
-        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
-        function toggleTheme() { document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark'); }
-        async function openShare() { if(await saveCurrent(false)) document.getElementById('shareModal').showModal(); }
-        function copyLink() { navigator.clipboard.writeText(window.location.href); document.getElementById('copyBtn').textContent="Copied!"; setTimeout(()=>document.getElementById('copyBtn').textContent="Copy Link", 2000); }
-        function tweetLink() { window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(window.location.href)}`, '_blank'); }
-        function setSort(type) { currentSort=type; loadLibrary(); }
+                      // --- LOGIC FIX: ANALOGY VS IDENTITY ---
+                      // Create a temporary ban list for this specific step
+                      let stepExclusions = new Set(historyFwd);
 
-        function renderTable() {
-            const con = document.getElementById('tableContainer');
-            const steps = parseInt(document.getElementById('steps').value);
-            con.innerHTML = '';
-            const head = document.createElement('div'); head.className='grid-row grid-header';
-            head.innerHTML = `<div class="cell cell-del"></div>`;
-            for(let i=steps; i>=1; i--) head.innerHTML += `<div class="cell">← ${i}</div>`;
-            head.innerHTML += `<div class="cell cell-input">📍 INPUT</div>`;
-            for(let i=1; i<=steps; i++) head.innerHTML += `<div class="cell">${i} →</div>`;
-            con.appendChild(head);
-            rows.forEach(r => {
-                // FIXED: IDs are now quoted properly in HTML generation
-                const div = document.createElement('div'); div.className='grid-row'; div.id=`row-${r.id}`;
-                let html = `<div class="cell cell-del"><button class="del-btn" onclick="deleteRow('${r.id}')">✕</button></div>`;
-                for(let i=steps; i>=1; i--) html += `<div class="cell" id="cell-${r.id}--${i}"></div>`;
-                html += `<div class="cell cell-input"><input type="text" value="${r.word}" oninput="rows.find(x=>x.id=='${r.id}').word=this.value; handleInput()"></div>`;
-                for(let i=1; i<=steps; i++) html += `<div class="cell" id="cell-${r.id}-${i}"></div>`;
-                div.innerHTML = html;
-                con.appendChild(div);
-            });
-        }
-    </script>
+                      // If this is Step 1, AND the input word is NOT the Start Word (e.g. King != Man)
+                      // We prevent "Input Echo" by banning the Start and End words.
+                      // This forces the math to find the parallel word (Queen).
+                      if (i === 1 && row.word.toLowerCase() !== sWord.toLowerCase()) {
+                          stepExclusions.add(sWord.toLowerCase());
+                          stepExclusions.add(eWord.toLowerCase());
+                      }
+
+                      const resWord = engine.findClosest(target, stepExclusions);
+    
+                      updateCell(row.id, i, resWord, 'next-text');
+                    
+                      // Add result to history so we don't loop back to it
+                      historyFwd.add(resWord);
+
+                      const snapVec = await engine.getInputVector(resWord);
+                      if (snapVec) currentVecFwd = snapVec;
+                      else currentVecFwd = target; 
+                  }
+
+                  // --- BACKWARD CHAIN (-1 to -5) ---
+                  for(let i=1; i<=steps; i++) {
+                      const target = new Float32Array(engine.dim);
+                      for(let k=0; k<engine.dim; k++) target[k] = currentVecBwd[k] - diff[k];
+    
+                      let norm = 0;
+                      for(let k=0; k<engine.dim; k++) norm += target[k] * target[k];
+                      norm = Math.sqrt(norm);
+                      if (norm > 0) for(let k=0; k<engine.dim; k++) target[k] /= norm;
+
+                      let stepExclusions = new Set(historyBwd);
+                      // Symmetric Logic for backwards:
+                      // If calculating Queen - (Woman - Man), we want King.
+                      // We must exclude Queen (Input), Woman (End), Man (Start).
+                      // Unless Input == End (Identity).
+                      if (i === 1 && row.word.toLowerCase() !== eWord.toLowerCase()) {
+                          stepExclusions.add(sWord.toLowerCase());
+                          stepExclusions.add(eWord.toLowerCase());
+                      }
+
+                      const resWord = engine.findClosest(target, stepExclusions);
+    
+                      updateCell(row.id, -i, resWord, 'prev-text');
+                      historyBwd.add(resWord);
+
+                      const snapVec = await engine.getInputVector(resWord);
+                      if (snapVec) currentVecBwd = snapVec;
+                      else currentVecBwd = target;
+                  }
+
+                  // Clear unused cells
+                  for(let i=steps+1; i<=5; i++) { updateCell(row.id, i, ""); updateCell(row.id, -i, ""); }
+              }
+          }
+
+          function updateCell(rid, step, txt, cls) {
+              const el = document.getElementById(`cell-${rid}-${step}`);
+              if(!el) return;
+              if(el.textContent !== txt) { el.textContent = txt; el.className = `cell ${cls || ''} animate-pop`; }
+          }
+
+          async function fetchSuggestions(word) {
+              if (suggestionCache.has(word)) { renderSuggestions(suggestionCache.get(word)); return; }
+              try {
+                  const res = await fetch(`${API}/suggestions?word=${word}`);
+                  if (!res.ok) return;
+                  const data = await res.json();
+                  suggestionCache.set(word, data);
+                  renderSuggestions(data);
+              } catch(e) {}
+          }
+
+          function renderSuggestions(data) {
+              const area = document.getElementById('suggestionArea');
+              area.innerHTML = '';
+              const mk = (t, l) => {
+                  const d = document.createElement('div'); d.className='chip'; 
+                  d.innerHTML=`<b>${l}:</b> ${t}`; 
+                  d.onclick=()=>{document.getElementById('endWord').value=t; handleInput()};
+                  return d; 
+              };
+              data.neighbors.forEach(w => area.appendChild(mk(w, '📍 Neighbor ')));
+              data.wildcards.forEach(w => area.appendChild(mk(w, '🎲 Wildcard ')));
+          }
+
+          async function saveCurrent(showSidebar) {
+              const s = document.getElementById('startWord').value;
+              const e = document.getElementById('endWord').value;
+              const d = parseInt(document.getElementById('steps').value);
+              try {
+                  const res = await fetch(`${API}/save`, {
+                      method: 'POST', headers: {'Content-Type': 'application/json'},
+                      body: JSON.stringify({ start_word: s, end_word: e, depth: d, test_words: rows })
+                  });
+                  const data = await res.json();
+                  if(data.error) throw new Error(data.error);
+                
+                  const currentState = { start: s, end: e, depth: d, words: rows.map(r => r.word) };
+                  relationshipCache.set(data.id, currentState);
+
+                  isInternalUpdate = true; 
+                  try { window.history.pushState({}, '', `?rel=${encodeURIComponent(data.id)}`); } catch(e) {}
+                
+                  if (showSidebar) { setSort('newest'); loadLibrary(); toggleSidebar(); }
+                  return true;
+              } catch(e) { 
+                  handleServerError();
+                  alert("Save failed. Server may be unreachable."); 
+                  return false; 
+              }
+          }
+
+          async function loadRelationship(id) {
+              if (relationshipCache.has(id)) {
+                  applyDataToUI(relationshipCache.get(id));
+                  return;
+              }
+              try {
+                  const res = await fetch(`${API}/load?id=${encodeURIComponent(id)}`);
+                  if(!res.ok) { handleServerError(); return; }
+                  const data = await res.json();
+                  relationshipCache.set(id, data);
+                  applyDataToUI(data);
+              } catch(e) { handleServerError(); }
+          }
+
+          function applyDataToUI(data) {
+              document.getElementById('startWord').value = data.start;
+              document.getElementById('endWord').value = data.end;
+              document.getElementById('steps').value = data.depth;
+              document.getElementById('stepsDisplay').textContent = data.depth;
+              rows = data.words.map((w, i) => ({ id: `load_${i}`, word: w }));
+              isInternalUpdate = true; 
+              renderTable();
+              runCalculation(); 
+          }
+
+          async function loadLibrary() {
+              const search = document.getElementById('libSearch').value;
+              try {
+                  const res = await fetch(`${API}/library?search=${encodeURIComponent(search)}&sort=${currentSort}`);
+                  if (!res.ok) { handleServerError(); return; }
+                  const data = await res.json();
+                  const list = document.getElementById('libList'); list.innerHTML = '';
+                  data.forEach(item => {
+                      const div = document.createElement('div'); div.className = 'lib-item';
+                      const words = item.input_words ? "Input: " + item.input_words.split(',').join(", ") : "";
+                      div.innerHTML = `<div class="lib-head"><span>${item.start_word} &rarr; ${item.end_word}</span> <span class="lib-meta">${item.views} views</span></div><div class="lib-words">${words}</div>`;
+                      div.onclick = () => { 
+                           if (!relationshipCache.has(item.id)) {
+                               const meta = div.querySelector('.lib-meta');
+                               const current = parseInt(meta.textContent) || 0;
+                               meta.textContent = `${current + 1} views`;
+                           }
+                           try { window.history.pushState({}, '', `?rel=${item.id}`); } catch (e) {}
+                           loadRelationship(item.id); 
+                      };
+                      list.appendChild(div);
+                  });
+              } catch(e) { handleServerError(); }
+          }
+
+          function handleInput() { clearTimeout(debounceTimer); debounceTimer = setTimeout(runCalculation, 300); }
+          function handleSlider(v) { document.getElementById('stepsDisplay').textContent = v; renderTable(); runCalculation(); }
+          function addRow() { rows.push({id:Date.now(), word:'new'}); renderTable(); runCalculation(); }
+          function deleteRow(id) { rows = rows.filter(r => String(r.id) !== String(id)); renderTable(); runCalculation(); }
+          function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+          function toggleTheme() { document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark'); }
+          async function openShare() { if(await saveCurrent(false)) document.getElementById('shareModal').showModal(); }
+          function copyLink() { navigator.clipboard.writeText(window.location.href); document.getElementById('copyBtn').textContent="Copied!"; setTimeout(()=>document.getElementById('copyBtn').textContent="Copy Link", 2000); }
+          function tweetLink() { window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(window.location.href)}`, '_blank'); }
+          function setSort(type) { currentSort=type; loadLibrary(); }
+
+          function renderTable() {
+              const con = document.getElementById('tableContainer');
+              const steps = parseInt(document.getElementById('steps').value);
+              con.innerHTML = '';
+              const head = document.createElement('div'); head.className='grid-row grid-header';
+              head.innerHTML = `<div class="cell cell-del"></div>`;
+              for(let i=steps; i>=1; i--) head.innerHTML += `<div class="cell">← ${i}</div>`;
+              head.innerHTML += `<div class="cell cell-input">📍 INPUT</div>`;
+              for(let i=1; i<=steps; i++) head.innerHTML += `<div class="cell">${i} →</div>`;
+              con.appendChild(head);
+              rows.forEach(r => {
+                  const div = document.createElement('div'); div.className='grid-row'; div.id=`row-${r.id}`;
+                  let html = `<div class="cell cell-del"><button class="del-btn" onclick="deleteRow('${r.id}')">✕</button></div>`;
+                  for(let i=steps; i>=1; i--) html += `<div class="cell" id="cell-${r.id}--${i}"></div>`;
+                  html += `<div class="cell cell-input"><input type="text" value="${r.word}" oninput="rows.find(x=>x.id=='${r.id}').word=this.value; handleInput()"></div>`;
+                  for(let i=1; i<=steps; i++) html += `<div class="cell" id="cell-${r.id}-${i}"></div>`;
+                  div.innerHTML = html;
+                  con.appendChild(div);
+              });
+          }
+      </script>
 </body>
 </html>

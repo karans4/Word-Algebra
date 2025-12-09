@@ -35,7 +35,28 @@ echo -e "${GREEN}[3/4] Installing dependencies...${NC}"
 pip install --upgrade pip > /dev/null
 pip install -r requirements.txt
 
+
+download() {
+  local url="$1"
+  if command -v wget >/dev/null 2>&1; then
+    wget "$url"
+  else
+    curl -LO "$url"
+  fi
+}
+
 # 5. Run Data Generation (setup.py)
+# Download embeddings if possible (should save about 15 mins)
+URL="http://notruefireman.org/files/embeddings_v2.npy"
+
+if command -v wget >/dev/null 2>&1; then
+  wget "$URL"
+else
+  curl -LO "$URL"
+fi
+
+# do the rest
+
 echo -e "${GREEN}[4/4] Running setup.py (This downloads models & builds the matrix)...${NC}"
 echo -e "${BLUE}Note: The first run can take 10-20 minutes to download the 400k dictionary.${NC}"
 python setup.py

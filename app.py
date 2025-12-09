@@ -61,8 +61,8 @@ def save_relationship():
     data = request.json
     start, end = data.get('start_word'), data.get('end_word')
     depth = min(int(data.get('depth', 1)), 5)
-    test_words = data.get('test_words', [])[:10]
-    words_list = [r['word'] for r in test_words if engine.is_valid(r.get('word'))]
+    test_words = data.get('test_words', [])[:5]
+    words_list = [r['word'].strip().lower() for r in test_words if engine.is_valid(r.get('word'))]
     
     if not engine.is_valid(start) or not engine.is_valid(end) or not words_list: 
         return jsonify({"error": "Invalid input"}), 400

@@ -175,18 +175,22 @@
             .del-btn { font-size: 0.9rem; }
             input[type="text"] { font-size: 0.85rem; }
         }
+		input[type="range"], progress { 
+		    accent-color: var(--primary); /* Sets thumb and fill to #ff4b4b */
+		}
     </style>
 </head>
 <body>
 
-    <noscript>
-        <div class="noscript-banner">
-            ⚠️ This application requires JavaScript to function. 
-            <a href="https://github.com/placeholder" target="_blank">View Source on GitHub</a>
-        </div>
-    </noscript>
+
 
     <div id="serverError" class="server-error-banner">
+	    <noscript>
+	        <div class="noscript-banner">
+	            ⚠️ This web app requires JavaScript to function. You can download the code yourself and run it locally.
+	            <a href="https://github.com/karans4/Word-Algebra/" target="_blank">View Source on GitHub</a>
+	        </div>
+	    </noscript>
         ⚠️ Cannot connect to server. Features may be limited.
     </div>
 
@@ -262,7 +266,7 @@
         <div style="margin-top:20px; text-align:center;">
             <button id="addBtn" onclick="addRow()" style="width:100%;">+ Add Test Row</button>
         </div>
-		<p> *For speed reasons, there are 400,000+ words in the input vocabulary, but only 5,000 in the output vocabulary. It may end up choosing a word that's "close enough"'</p> <p> <a href="placeholder">Read more about the architecture of this web app</a></p>
+		<p> *For bandwidth and speed reasons, there are 400,000+ words in the input vocabulary, but only 8,000 in the output vocabulary. It may end up choosing a word that's "close enough" if the exact word isn't in the output vocabulary.</p> <p> <a href="placeholder">Read more about the architecture of this web app</a> <a href="https://github.com/karans4/Word-Algebra/" target="_blank">View Source on GitHub</a></p> 
     </div>
 
   <script>

@@ -4,6 +4,8 @@
 
 An edge compute word-vector based analogy calculator, running in the browser.
 
+[See it in action](https://notruefireman.org/word_algebra)
+
 Basically, it takes word vectors, and illustrates how the difference between the two roughly corresponds with concepts.
 
 EG : Let V(w) -> v be a function which calculates a vector v for the word w. 

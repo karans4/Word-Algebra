@@ -14,7 +14,7 @@ The "algebra" is done entirely in the browser, with a cache of around 8000 words
 
 The server itself does minimal work, acting as a look up table of vectors for 400,000+ less commonly used words. This is so you can type in any word as an input, but the output is limited to the 8000 locally stored words. If you lose connection, as long as the /api/matrix file is loaded, the web page can act independently, but the input would then be limited to 8000 words instead of all 400,000+ words.
 
-[Read this for an Architectural Breakdown of how the Application works.](https://github.com/karans4/Word-Algebra/tree/main)
+[Read this for an Architectural Breakdown of how the Application works.](https://github.com/karans4/Word-Algebra/blob/main/Word%20Algebra%20Architecture.md)
 
 
 ## How to Run

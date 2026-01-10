@@ -1,4 +1,4 @@
-# Word Algebra: High-Performance Edge-Compute Inference
+# Word Algebra
 
 ![Company To Product](company_to_product.png)
 ![Beijing To China](beijing_to_china.png)

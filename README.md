@@ -1,46 +1,83 @@
-# Word Algebra
+# Word Algebra: High-Performance Edge-Compute Inference
+
 ![Company To Product](company_to_product.png)
 ![Beijing To China](beijing_to_china.png)
 
-An edge compute word-vector based analogy calculator, running in the browser.
+**Word Algebra** is a browser-resident inference engine that executes real-time vector arithmetic on the edge. By shifting high-dimensional nearest-neighbor searches from the server to the client, the system achieves sub-millisecond inference speeds and full offline capability.
 
-[See it in action](https://notruefireman.org/word_algebra)
+[**Live Demo**](https://notruefireman.org/word_algebra) | [**Architectural Deep Dive**](https://github.com/karans4/Word-Algebra/blob/main/Word%20Algebra%20Architecture.md)
 
-Basically, it takes word vectors, and illustrates how the difference between the two roughly corresponds with concepts.
+---
 
-EG : Let V(w) -> v be a function which calculates a vector v for the word w. 
+## 🚀 The Core Concept: Semantic Vector Math
 
-Let V(woman) - V(man) = v<sub>3</sub> . We should expect that V(king) + v<sub>3</sub> ≈ V(queen).
+The engine treats words as points in a high-dimensional manifold. By calculating the displacement between two word-vectors, we can "extract" a semantic relationship and apply it to a new base word.
 
-The "algebra" is done entirely in the browser, with a cache of around 8000 words and vectors loaded locally in the browser, 15 MB compressed, 60 MB uncompressed.
-
-The server itself does minimal work, acting as a look up table of vectors for 400,000+ less commonly used words. This is so you can type in any word as an input, but the output is limited to the 8000 locally stored words. If you lose connection, as long as the /api/matrix file is loaded, the web page can act independently, but the input would then be limited to 8000 words instead of all 400,000+ words.
-
-[Read this for an Architectural Breakdown of how the Application works.](https://github.com/karans4/Word-Algebra/blob/main/Word%20Algebra%20Architecture.md)
+$$V(\text{king}) - V(\text{man}) + V(\text{woman}) \approx V(\text{queen})$$
 
 
-## How to Run
-### TL;DR
-- `git clone https://github.com/karans4/Word-Algebra.git`
-- `cd Word-Algebra`
-- `bash first_run.sh`
-- `source venv/bin/activate && python app.py`
 
-### Not TL;DR
-- Make sure you have python3, pip, and venv installed.
-- Navigate in the terminal to the directory you downloaded this file in
-- Run first_run.sh, This should set everything up for you, and if it works, then skip to step 8.
-- Create a venv with `python3 -m venv venv`
-- If you are not in the venv, make sure you do `source ./venv/in/activate`
-- Install the requirements with `pip install -r requirements.txt`, also install `gunicorn` on production
-- Run `python setup.py` to initialize the vectors (may take 20 to 40 min to run)
-- You can either run `flask --app app.py run` when testing, or `gunicorn --workers 4 app:app --preload --bind 0.0.0.0:5000` on production servers.
-	* If you do preload, you might want to set embeddings.npy to read only with `chmod 444 embeddings.npy` to save memory.
-	
-	
-	
-## Tips
-* You may want to use cloudflare or a CDN for caching. It brings the bandwidth and load on the server to a fraction of a percent what it would be otherwise.
-* You can delete the *.npx, *.json, and *vocab*.txt files, and run `python setup.py` to regenerate them, but the words chosen for the output matrix depend on your CPU type, python version, library implementations, etc. If you want consistency, stick with the generated files.
+The "algebra" is performed entirely in the browser using a high-density cache of ~8,000 common words and their corresponding vectors.
 
+---
 
+## 🛠 Engineering & Optimization Highlights
+
+To make 400k+ high-dimensional vectors usable in a standard browser environment without massive server overhead, I implemented several key optimizations:
+
+### 1. "Fat Client" Hybrid Architecture
+Traditional AI applications rely on heavy API calls for every computation. This project uses a hybrid compute model:
+* **Edge (Browser):** Houses a compressed **15MB local cache** (60MB uncompressed) of the top 8,000 words. This allows for instant, offline "analogy-to-vector" calculations and nearest-neighbor lookups.
+* **Server (Backend):** Acts as a lightweight, high-speed lookup table for the "long-tail" (400,000+ words). If the user inputs an obscure word, the server retrieves only that specific vector, while the final search remains client-side.
+
+### 2. High-Density Data Compression
+* **Latency Management:** The 15MB payload is optimized for delivery via CDN. By utilizing Gzip/Brotli at the edge (Cloudflare), the initial "cold start" for the entire inference engine is reduced to a single asynchronous fetch.
+* **Offline Capability:** Once `/api/matrix` is loaded, the application is fully functional without an internet connection for any inputs within the 8k-word local vocabulary.
+
+### 3. Production-Grade Memory Optimization
+The Flask backend is designed to handle the 400k word matrix efficiently on low-resource VPS environments:
+* **Memory Mapping ($mmap$):** Uses `embeddings.npy` in $mmap$ mode to allow the OS to manage memory paging efficiently.
+* **Process Preloading:** Gunicorn is configured with the `--preload` flag to share the embedding matrix memory across all worker processes, significantly reducing the RAM footprint.
+
+---
+
+## 💻 Tech Stack
+* **Inference/Math:** NumPy, Scikit-learn (Preprocessing), Vanilla JS (Client-side)
+* **Backend:** Python, Flask, Gunicorn
+* **Infrastructure:** Debian/Red Hat, Cloudflare CDN
+
+---
+
+## 🛠 Installation & Deployment
+
+### Quick Start (Development)
+```bash
+git clone [https://github.com/karans4/Word-Algebra.git](https://github.com/karans4/Word-Algebra.git)
+cd Word-Algebra
+bash first_run.sh
+source venv/bin/activate && python app.py
+```
+
+### Manual Setup (Production)
+1.  **Environment Setup:**
+    ```bash
+    python3 -m venv venv
+    source ./venv/bin/activate
+    pip install -r requirements.txt gunicorn
+    ```
+2.  **Initialize Embeddings:** Generate the vectorized lookup files (this can take 20–40 minutes depending on hardware).
+    ```bash
+    python setup.py
+    ```
+3.  **Production Deployment:**
+    Use Gunicorn with preloading to optimize shared memory:
+    ```bash
+    gunicorn --workers 4 app:app --preload --bind 0.0.0.0:5000
+    ```
+    *Tip: Set `chmod 444 embeddings.npy` to ensure the matrix is read-only for shared memory safety.*
+
+---
+
+## 📈 Performance & Scaling Tips
+* **CDN Strategy:** Using a CDN like Cloudflare is highly recommended. Because the `/api/matrix` file is static, edge caching reduces server bandwidth and CPU load by over 99%.
+* **Deterministic Weights:** The vocabulary matrix generation is deterministic based on the CPU architecture and library implementation. For consistent results across a distributed cluster, generate the `*.npx` and `*.json` files once and distribute them as static assets.

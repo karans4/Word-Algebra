@@ -48,9 +48,10 @@ The Flask backend is designed to handle the 400k word matrix efficiently on low-
 
 ---
 
-## 🛠 Installation & Deployment
+## Installation & Deployment
 
 ### Quick Start (Development)
+Downloads the precomputed word vectors for quick start.
 ```bash
 git clone https://github.com/karans4/Word-Algebra.git
 cd Word-Algebra
@@ -59,6 +60,7 @@ source venv/bin/activate && python app.py
 ```
 
 ### Manual Setup (Production)
+If you do this strategy, it will have to calculate the Word Vectors from scratch. The results are deterministic based on CPU architecture/hardware, so you may get slightly different answers.
 1.  **Environment Setup:**
     ```bash
     python3 -m venv venv
@@ -78,6 +80,6 @@ source venv/bin/activate && python app.py
 
 ---
 
-## 📈 Performance & Scaling Tips
+## Performance & Scaling Tips
 * **CDN Strategy:** Using a CDN like Cloudflare is highly recommended. Because the `/api/matrix` file is static, edge caching reduces server bandwidth and CPU load by over 99%.
-* **Deterministic Weights:** The vocabulary matrix generation is deterministic based on the CPU architecture and library implementation. For consistent results across a distributed cluster, generate the `*.npx` and `*.json` files once and distribute them as static assets.
+* **Deterministic Weights:** The vocabulary matrix generation is deterministic based on the CPU architecture and library implementation. You can delete the `*.npx`, `*.txt`, and `*.json` files, but then you have to run `python setup.py` again. You may get slightly different answers based on your CPU architecture/hardware.

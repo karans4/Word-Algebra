@@ -9,7 +9,7 @@
 
 ---
 
-## 🚀 The Core Concept: Semantic Vector Math
+## The Core Concept: Semantic Vector Math
 
 The engine treats words as points in a high-dimensional manifold. By calculating the displacement between two word-vectors, we can "extract" a semantic relationship and apply it to a new base word.
 
@@ -21,7 +21,7 @@ The "algebra" is performed entirely in the browser using a high-density cache of
 
 ---
 
-## 🛠 Engineering & Optimization Highlights
+## Engineering & Optimization Highlights
 
 To make 400k+ high-dimensional vectors usable in a standard browser environment without massive server overhead, I implemented several key optimizations:
 
@@ -41,7 +41,7 @@ The Flask backend is designed to handle the 400k word matrix efficiently on low-
 
 ---
 
-## 💻 Tech Stack
+## Tech Stack
 * **Inference/Math:** NumPy, Scikit-learn (Preprocessing), Vanilla JS (Client-side)
 * **Backend:** Python, Flask, Gunicorn
 * **Infrastructure:** Debian/Red Hat, Cloudflare CDN
@@ -52,7 +52,7 @@ The Flask backend is designed to handle the 400k word matrix efficiently on low-
 
 ### Quick Start (Development)
 ```bash
-git clone [https://github.com/karans4/Word-Algebra.git](https://github.com/karans4/Word-Algebra.git)
+git clone https://github.com/karans4/Word-Algebra.git
 cd Word-Algebra
 bash first_run.sh
 source venv/bin/activate && python app.py
